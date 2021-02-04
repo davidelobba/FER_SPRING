@@ -7,6 +7,8 @@ import cv2
 import numpy as np
 import json
 from random import randint
+from PIL import Image,  ImageSequence
+
 
 def make_dataset(directory, class_to_idx):
     instances = []
@@ -37,7 +39,7 @@ class CAER(VisionDataset):
         self.targets = [s[1] for s in samples]
         self.dim_image = dim_image
         self.min_frames = min_frames
-        
+
         self.resize = torchvision.transforms.Resize(self.dim_image)
         self.flip_h = torchvision.transforms.RandomHorizontalFlip(1) #1 probability 
         self.to_tensor = torchvision.transforms.ToTensor()
@@ -72,14 +74,16 @@ class CAER(VisionDataset):
         """
         path, target = self.samples[index]
         sample1, sample2 = self.video_loader(path)
-
         return sample1, sample2, target
+    
+    def __len__(self):
+        return len(self.samples)
 
     def video_loader(self, path):
         # TODO implement also other augmentation strategies
         # right now only flip and time shift
 
-        cap = cv2.VideoCapture(video_path)
+        cap = cv2.VideoCapture(path)
         num_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))        
         sequence = torch.Tensor()
 
@@ -106,8 +110,9 @@ class CAER(VisionDataset):
         #because we are considering chunk of self.min_frames sequences 
         start_frame =  randint(0, num_frames-self.min_frames)
         start_frame_flip =  randint(0, num_frames-self.min_frames)
+
         
-        return sequence[start_frame:start_frame+self.min_frames], sequence_flip[start_frame_flip:start_frame_flip+sequence_flip]
+        return sequence[start_frame:start_frame+self.min_frames], sequence_flip[start_frame_flip:start_frame_flip+self.min_frames]
 
         
         

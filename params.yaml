@@ -1,13 +1,13 @@
 dataset:
     train:
-        path : "/path/to/dataset"
-        dim_image: 64
-        min_frames: 25
+        path : "/home/riccardo/CAER_crop/validation"
+        dim_image: 32
+        min_frames: 5
         classes : 7
     test: 
-        path : "/path/to/dataset"
-        dim_image: 64
-        min_frames: 25
+        path : "/home/riccardo/CAER_crop/test"
+        dim_image: 32
+        min_frames: 5
         classes : 7 
     
 model_params:
@@ -17,9 +17,10 @@ model_params:
 training:
     lr_encoder : 0.01
     lr_linear : 0.001
-    batch_size : 8          
+    batch_size : 16          
     wd : 0.001
     momentum : 0.9
     epochs : 100
     classes : 7
-    num_workers : 8
+    num_workers : 4
+    log_model: 20

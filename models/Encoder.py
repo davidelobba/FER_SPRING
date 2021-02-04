@@ -7,7 +7,7 @@ class EncoderResnet(torch.nn.Module):
         dim: feature dimension (default: 128)
         K: queue size;
         """
-        super(encoder, self).__init__()
+        super(EncoderResnet, self).__init__()
         self.num_feat= num_feat
 
         # create the encoders
@@ -30,11 +30,12 @@ class EncoderResnet(torch.nn.Module):
             outputs: [batch_size, 128]
             video_features: [batch_size,2048]
         """
-        seq_length = final_frames
-        batch_size = int(inputs.size(0)/seq_length)
+        seq_length = inputs.shape[1]
+        batch_size = inputs.shape[0] #int(inputs.size(0)/seq_length)
         
+        # no too sure about this line
+        inputs = inputs.view(inputs.shape[0]*inputs.shape[1],inputs.shape[2],inputs.shape[3],inputs.shape[4])
         # compute features
-
         frame_features = self.resnet(inputs)
         frame_features = frame_features.view(batch_size, seq_length, *frame_features.shape[1:])
 

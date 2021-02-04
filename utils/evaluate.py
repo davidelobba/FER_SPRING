@@ -1,5 +1,6 @@
 import torch
-def evaluate(encoder, linear, data_loader, encoder_loss, classifier_loss,device='cuda:0'):
+from tqdm import tqdm
+def evaluate_model(encoder, linear, data_loader, encoder_loss, classifier_loss,device='cuda:0'):
     samples = 0.
     cumulative_loss = 0.
     cumulative_contr_loss = 0.
@@ -9,24 +10,16 @@ def evaluate(encoder, linear, data_loader, encoder_loss, classifier_loss,device=
     encoder.eval()
     linear.eval()
     with torch.no_grad():
-        for sample_1, sample_2, targets in enumerate(data_loader)::
+        for _ , (sample_1, sample_2, targets) in enumerate(tqdm(data_loader)):
+
             sample_1, sample_2, targets = sample_1.to(device), sample_2.to(device), targets.to(device)
-
-            seq_length = inputs.size(1)
-
-            inputs = inputs.float()
-            inputs = inputs.view(-1,*inputs.size()[2:])
-            inputs = inputs.to(device)
-            targets = targets.to(device)
 
             # Forward pass
             contr_feat, contr_tar, video_features = encoder(sample_1,sample_2,targets,train=False)                
             contr_loss = encoder_loss(contr_feat, contr_tar)
 
-            feat,_ = torch.split(video_features, [batch_size, batch_size], dim=0)
-
-            feat = feat.detach()
-            logits = linear(feat)
+            video_features = video_features.detach()
+            logits = linear(video_features)
             ce_loss = classifier_loss(logits, targets)
 
             loss = contr_loss + ce_loss

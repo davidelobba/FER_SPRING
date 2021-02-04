@@ -86,8 +86,11 @@ class MoCo(torch.nn.Module):
         features = torch.cat([q1, q2, k1.detach(), k2.detach(), self.queue_features1.clone().detach(), self.queue_features2.clone().detach()])
         labels = torch.cat([targets, targets, targets, targets,self.queue_targets, self.queue_targets])
 
-        video_features = torch.cat([video_feat_q1, video_feat_q2], dim = 0)
-
+        if train == True:
+            video_features = torch.cat([video_feat_q1, video_feat_q2], dim = 0)
+        else:
+            video_features = video_feat_q1
+            
         if train == True:
           self._dequeue_and_enqueue(k1, k2, targets)
 
