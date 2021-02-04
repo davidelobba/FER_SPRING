@@ -1,0 +1,25 @@
+dataset:
+    train:
+        path : "/path/to/dataset"
+        dim_image: 64
+        min_frames: 25
+        classes : 7
+    test: 
+        path : "/path/to/dataset"
+        dim_image: 64
+        min_frames: 25
+        classes : 7 
+    
+model_params:
+    temperature: 0.07
+    backbone: "resnet"
+
+training:
+    lr_encoder : 0.01
+    lr_linear : 0.001
+    batch_size : 8          
+    wd : 0.001
+    momentum : 0.9
+    epochs : 100
+    classes : 7
+    num_workers : 8
