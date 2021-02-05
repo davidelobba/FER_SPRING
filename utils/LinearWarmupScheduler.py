@@ -1,6 +1,7 @@
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.optim import Optimizer
 from typing import List
+import math
 
 class LinearWarmupCosineAnnealingLR(_LRScheduler):
     """

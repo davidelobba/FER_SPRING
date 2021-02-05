@@ -18,11 +18,6 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
     moco_encoder.train()
     linear.train()
     
-    print('Epc -1')
-    test_loss, test_contr_loss, test_ce_loss, test_accuracy = evaluate_model(moco_encoder,linear, loader_test, encoder_loss, classifier_loss, device=device)
-    print('\t Test loss {:.5f}, Test_contr_loss {:.5f}, Test_ce_loss {:.5f}, Test accuracy {:.2f}'.format(test_loss, test_contr_loss, test_ce_loss,test_accuracy))
-    wandb.log({"Test_Accuracy": test_accuracy , "Test_Contrastive Loss": test_contr_loss, 
-        "Test_Cross Entropy Loss": test_ce_loss,  "Test_Total Loss": test_loss})
     for e in range(epochs):
 
         samples = 0.
@@ -77,7 +72,7 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
             print('\t Test loss {:.5f}, Test_contr_loss {:.5f}, Test_ce_loss {:.5f}, Test accuracy {:.2f}'.format(test_loss, test_contr_loss, test_ce_loss,test_accuracy))
             wandb.log({"Test_Accuracy": test_accuracy , "Test_Contrastive Loss": test_contr_loss, 
                     "Test_Cross Entropy Loss": test_ce_loss,  "Test_Total Loss": test_loss})
-        print('\t Training loss {:.5f}, Train_contr_loss {:.5f}, Train_ce_loss {:.5f}, Training accuracy {:.2f}'.format(train_loss, train_contr_loss, train_ce_loss, train_accuracy))
+        print('\t Training loss {:.5f}, Train_contr_loss {:.5f}, Train_ce_loss {:.5f}, Training accuracy {:.2f}'.format(final_loss, final_contr_loss, final_ce_loss, accuracy))
         wandb.log({"Accuracy": accuracy, "Contrastive Loss": final_contr_loss,
                     "Cross Entropy Loss": final_ce_loss,  "Total Loss": final_loss})
         scheduler.step()

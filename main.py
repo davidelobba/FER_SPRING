@@ -29,7 +29,7 @@ def main(args):
     print(f"------ Initializing dataset...")
     # data initialization
     dataset_train = CAER(config["dataset"]["train"]["path"],dim_image=config["dataset"]["train"]["dim_image"], min_frames=config["dataset"]["train"]["min_frames"])
-    dataset_test = CAER(config["dataset"]["train"]["path"],dim_image=config["dataset"]["train"]["dim_image"], min_frames=config["dataset"]["train"]["min_frames"])
+    dataset_test = CAER(config["dataset"]["test"]["path"],dim_image=config["dataset"]["train"]["dim_image"], min_frames=config["dataset"]["test"]["min_frames"])
     loader_train = torch.utils.data.DataLoader(dataset_train, batch_size=config["training"]["batch_size"],num_workers=config["training"]["num_workers"], drop_last= True)
     loader_test = torch.utils.data.DataLoader(dataset_test, batch_size=config["training"]["batch_size"], num_workers=config["training"]["num_workers"], drop_last= True)
     print(f"------ Dataset Initialized")
