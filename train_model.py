@@ -25,6 +25,7 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
         cumulative_contr_loss = 0.
         cumulative_ce_loss = 0.
         cumulative_accuracy = 0.
+        print(f"Epoch -  {e}")
 
         for batch_idx, (sample_1, sample_2, targets) in enumerate(tqdm(loader_train)):
             
@@ -65,7 +66,6 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
             filename = os.path.join(output_dir,"linear","linear_epoch_"+str(e)+".pth")
             torch.save(linear.state_dict(), filename)
 
-        print(f"Epoch -  {e}")
         # test performance over the test set    
         if test:
             test_loss, test_contr_loss, test_ce_loss, test_accuracy = evaluate_model(moco_encoder,linear, loader_test, encoder_loss, classifier_loss, device=device)

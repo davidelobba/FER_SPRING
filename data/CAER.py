@@ -108,8 +108,12 @@ class CAER(VisionDataset):
         sequence_flip = self.flip_h(sequence)
 
         #because we are considering chunk of self.min_frames sequences 
-        start_frame =  randint(0, num_frames-self.min_frames)
-        start_frame_flip =  randint(0, num_frames-self.min_frames)
+        if num_frames > self.min_frames:
+            start_frame =  randint(0, num_frames-self.min_frames)
+            start_frame_flip =  randint(0, num_frames-self.min_frames)
+        else:
+            start_frame = 0 
+            start_frame_flip = 0
 
         
         return sequence[start_frame:start_frame+self.min_frames], sequence_flip[start_frame_flip:start_frame_flip+self.min_frames]
