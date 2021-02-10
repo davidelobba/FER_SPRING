@@ -43,7 +43,7 @@ def evaluate_model(encoder, linear, data_loader, encoder_loss, classifier_loss,d
 
     return final_loss, final_contr_loss, final_ce_loss, accuracy 
 
-def evaluate_model_graph(model,data_loader,  classifier_loss,device='cuda:0'):
+def evaluate_model_graph(model,data_loader,  classifier_loss,device='cuda:0', adj=None):
     samples = 0.
     cumulative_loss = 0.
     cumulative_contr_loss = 0.
@@ -57,7 +57,7 @@ def evaluate_model_graph(model,data_loader,  classifier_loss,device='cuda:0'):
             target,ld = target.to(device), ld.to(device)
 
             # Forward pass
-            logits = model(ld)
+            logits = model(adj,ld)
             loss = classifier_loss(logits, target)
 
             batch_size = ld.shape[0]

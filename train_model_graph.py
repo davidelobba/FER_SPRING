@@ -3,8 +3,10 @@ from utils.evaluate import evaluate_model_graph
 from tqdm import tqdm
 import os 
 from time import gmtime, strftime
+from models.STGCN import get_normalized_adj
+import numpy as np 
 
-def train(model, loader_train, optimizer, classifier_loss, wandb,epochs=200,device="cuda:2", test=False, loader_test=None, log_model=20, output_dir=None):
+def train(model, loader_train, optimizer, classifier_loss, wandb,epochs=200,device="cuda:2", test=False, loader_test=None, log_model=20, output_dir=None, adj=None):
     
     e = 0
     log_dir =  strftime("%d-%m-%y %H:%M:%S", gmtime())
@@ -16,6 +18,9 @@ def train(model, loader_train, optimizer, classifier_loss, wandb,epochs=200,devi
 
     model.train()
 
+    with open(adj, 'rb') as f:
+        A = np.load(f)
+    A_hat = torch.Tensor(get_normalized_adj(A)).to(device)
     for e in range(epochs):
 
         samples = 0.
@@ -30,7 +35,7 @@ def train(model, loader_train, optimizer, classifier_loss, wandb,epochs=200,devi
             targets, ld = targets.to(device), ld.to(device)
 
             # Forward pass
-            logits = model(ld)
+            logits = model(A_hat,ld)
             loss = classifier_loss(logits, targets)
             # compute loss 
             optimizer.zero_grad()
@@ -53,10 +58,10 @@ def train(model, loader_train, optimizer, classifier_loss, wandb,epochs=200,devi
 
         # test performance over the test set    
         if test:
-            test_loss, test_accuracy = evaluate_model_graph(model, loader_test, classifier_loss, device=device)
+            test_loss, test_accuracy = evaluate_model_graph(model, loader_test, classifier_loss, device=device, adj=A_hat)
             print('\t Test loss {:.5f},  Test accuracy {:.2f}'.format(test_loss, test_accuracy))
-            #wandb.log({"Test_Accuracy": test_accuracy ,  "Test_Total Loss": test_loss})
+            wandb.log({"Test_Accuracy": test_accuracy ,  "Test_Total Loss": test_loss})
         print('\t Training loss {:.5f}, Training accuracy {:.2f}'.format(final_loss,  accuracy))
-        #wandb.log({"Accuracy": accuracy, "Total Loss": final_loss})
+        wandb.log({"Accuracy": accuracy, "Total Loss": final_loss})
 
 

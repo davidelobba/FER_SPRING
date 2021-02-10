@@ -8,6 +8,7 @@ import yaml
 from models.MoCo import MoCo
 from models.Encoder import EncoderResnet
 from models.FER_GAT import FER_GAT
+from models.STGCN import STGCN, get_normalized_adj
 
 from utils.SupCon import SupConLoss
 from utils.LinearWarmupScheduler import LinearWarmupCosineAnnealingLR
@@ -19,14 +20,14 @@ def main(args):
     with open(args.config) as f:
         config = yaml.safe_load(f)
 
-    # wandb.init(project="fer",  config={
-    #             "learning_rate_encoder": config["training"]["lr_encoder"],
-    #             "learning_rate_classif": config["training"]["lr_linear"],
-    #             "backbone": config["model_params"]["backbone"],
-    #             "img_dim": config["dataset"]["train"]["dim_image"],
-    #             "frame_l": config["dataset"]["train"]["min_frames"],
-    #             "dataset": args.dataset
-    #         } )
+    wandb.init(project="fer",  config={
+                "learning_rate_encoder": config["training"]["lr_encoder"],
+                "learning_rate_classif": config["training"]["lr_linear"],
+                "backbone": config["model_params"]["backbone"],
+                "img_dim": config["dataset"]["train"]["dim_image"],
+                "frame_l": config["dataset"]["train"]["min_frames"],
+                "dataset": args.dataset
+            } )
 
     print(f"------ Initializing dataset...")
     # data initialization
@@ -35,7 +36,7 @@ def main(args):
         dataset_test = CAER(config["dataset"]["test"]["path"],dim_image=config["dataset"]["train"]["dim_image"], min_frames=config["dataset"]["test"]["min_frames"])
     elif args.dataset== "RAVDESS":
         dataset_train = RAVDESS_LANDMARK(config["dataset"]["train"]["path"], min_frames=config["dataset"]["train"]["min_frames"])
-        dataset_test = RAVDESS_LANDMARK(config["dataset"]["test"]["path"], min_frames=config["dataset"]["test"]["min_frames"])
+        dataset_test = RAVDESS_LANDMARK(config["dataset"]["test"]["path"], min_frames=config["dataset"]["test"]["min_frames"],  test=True)
         
     loader_train = torch.utils.data.DataLoader(dataset_train, batch_size=config["training"]["batch_size"],shuffle=True,num_workers=config["training"]["num_workers"], drop_last= True)
     loader_test = torch.utils.data.DataLoader(dataset_test, batch_size=config["training"]["batch_size"], shuffle=True,num_workers=config["training"]["num_workers"], drop_last= True)
@@ -49,7 +50,11 @@ def main(args):
         linear = torch.nn.Linear(512, config["dataset"]["train"]["classes"]).to(args.device)
         linear = linear.to(args.device)
     else:
-        model = FER_GAT(device=args.device, num_frames=config["dataset"]["train"]["min_frames"])
+        #model = FER_GAT(device=args.device, num_frames=config["dataset"]["train"]["min_frames"])
+
+        #num_nodes, num_features, num_timesteps_input, num_timesteps_output
+        num_nodes = 51
+        model = STGCN(num_nodes,2,config["dataset"]["train"]["min_frames"],8, config["dataset"]["train"]["classes"])
         model = model.to(args.device)
 
     print(f"------ Networks Initialized")
@@ -67,7 +72,7 @@ def main(args):
                 {'params': linear.parameters(), 'lr': config["training"]["lr_linear"]}], lr=config["training"]["lr_encoder"], weight_decay=config["training"]["wd"], momentum=config["training"]["momentum"]) 
         scheduler = LinearWarmupCosineAnnealingLR(optimizer, warmup_epochs = 5, max_epochs = 150)
     else:
-        optimizer = torch.optim.Adam(model.parameters(),config["training"]["lr_encoder"])
+        optimizer = torch.optim.SGD(model.parameters(),config["training"]["lr_encoder"], weight_decay=config["training"]["wd"], momentum=config["training"]["momentum"])
     # train
     print(f"------ Training Started")
     if config["training"]["contrastive"]:
@@ -75,7 +80,7 @@ def main(args):
         train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss, classifier_loss, wandb, epochs=config["training"]["epochs"], device=args.device, test=True, loader_test=loader_test, log_model=config["training"]["log_model"], output_dir=args.output)
     else:
         from train_model_graph import train
-        train(model,loader_train, optimizer, classifier_loss, wandb, epochs=config["training"]["epochs"], device=args.device, test=True, loader_test=loader_test, log_model=config["training"]["log_model"], output_dir=args.output)
+        train(model,loader_train, optimizer, classifier_loss, wandb, epochs=config["training"]["epochs"], device=args.device, test=True, loader_test=loader_test, log_model=config["training"]["log_model"], output_dir=args.output, adj=config["model_params"]["adj_matr"])
  
 
 if __name__ == '__main__':

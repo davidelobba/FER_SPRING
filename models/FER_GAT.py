@@ -88,15 +88,15 @@ class GAT(nn.Module):
         for batch_idx in range(feat.shape[0]):
             h = self.layer1(feat[batch_idx])
             h = F.elu(h)
-            h = self.layer2(h)
+            h = self.layer2(h).mean(1)
             out = torch.cat((out, h.unsqueeze(0)), 0)
 
         return out
 
 
 class FER_GAT(nn.Module):
-    def __init__(self, out_gat: int = 128, num_of_ld=51, num_frames=128, hidden_dim=64, 
-                 memory_attended=True, att_head=4, lstm_dim = 32, n_classes=8, device="cpu"):
+    def __init__(self, out_gat: int = 128, num_of_ld=51, in_dim=128, hidden_dim=64, 
+                 memory_attended=True, att_head=4, lstm_dim = 32, n_classes=8,num_frames=50,  device="cpu"):
         
         super().__init__()
 
@@ -114,31 +114,31 @@ class FER_GAT(nn.Module):
         G.add_edges(start, end)
         G = G.to(device)
         
-        self.lstm_encoder = nn.LSTM(2, lstm_dim, 2, batch_first = True, dropout=0.1)
         self.gat = GAT(G,
-                       in_dim=lstm_dim,
+                       in_dim=2,
                        hidden_dim=hidden_dim,
                        out_dim=out_gat,
                        num_heads=att_head)
         
-        self.fc1 = nn.Linear(out_gat*num_of_ld,512)
-        self.fc2 = nn.Linear(512, n_classes)
+        self.lstm_encoder = nn.LSTM(num_of_ld, lstm_dim, 2, batch_first = True, dropout=0.1)
+        self.fc = nn.Linear(num_frames*lstm_dim, n_classes)
 
-        #self.soft = nn.Softmax(dim=1)
 
     def forward(self, features) -> torch.Tensor:
         
         # loop trough landmark dimension
         extracted = torch.tensor([]).to(features.device)
         
-        for idx in range(features.shape[2]):
-            out , _ = self.lstm_encoder(features[:,:,idx,:].permute(1,0,2))            
-            extracted = torch.cat((extracted, out.permute(1,0,2)[:,-1,:].unsqueeze(1)),1)
-        #print(extracted.flatten(start_dim=2).shape)
-        feat = self.gat(extracted.flatten(start_dim=2))
-        #print(feat.flatten(start_dim=1).shape)
-        out = F.elu(self.fc1(feat.flatten(start_dim=1)))
-        out = self.fc2(out)
-        #out = self.soft(out)
+#         for idx in range(features.shape[2]):
+#             out , (h,c) = self.lstm_encoder(features[:,:,idx,:].permute(1,0,2))            
+#             extracted = torch.cat((extracted, out.permute(1,0,2)[:,-1,:].unsqueeze(1)),1)
 
+        for batch_idx in range(features.shape[1]): # loop over num_frames dimension
+            feat = self.gat(features[:,batch_idx])
+            extracted = torch.cat((extracted, feat.unsqueeze(1)),1)
+            
+        # [seq_len, batch, input_size]
+        out,_ = self.lstm_encoder(extracted.permute(1,0,2))
+        out = out.permute(1,0,2)
+        out = self.fc(out.flatten(start_dim=1))
         return out

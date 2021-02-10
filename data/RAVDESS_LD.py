@@ -24,7 +24,7 @@ def make_dataset(directory, class_to_idx):
     return instances
 
 class RAVDESS_LANDMARK(Dataset):
-    def __init__(self, root, min_frames=25):
+    def __init__(self, root, min_frames=25, test=False):
         super(RAVDESS_LANDMARK, self).__init__()
         self.root = root
         classes, class_to_idx = self._find_classes(self.root)
@@ -36,6 +36,7 @@ class RAVDESS_LANDMARK(Dataset):
         self.class_to_idx = class_to_idx
         self.samples = samples
         self.min_frames = min_frames
+        self.test = test
         
 
     def __len__(self):
@@ -82,6 +83,9 @@ class RAVDESS_LANDMARK(Dataset):
         if num_frames > self.min_frames:
             start_frame =  randint(0, num_frames-self.min_frames)
         else:
-            start_frame = 0 
+            start_frame = 0
+
+        if self.test:
+            start_frame =num_frames - self.min_frames
     
         return target, ld[start_frame: start_frame+self.min_frames,17:,: ]
