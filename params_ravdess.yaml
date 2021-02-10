@@ -1,21 +1,21 @@
 dataset:
     train:
-        path : "/home/riccardo/CAER_crop/validation"
+        path : "/home/riccardo/Datasets/RAVDESS__LD/Training_set"
         dim_image: 32
-        min_frames: 10
-        classes : 7
+        min_frames: 50
+        classes : 8
     test: 
-        path : "/home/riccardo/CAER_crop/test"
+        path : "/home/riccardo/Datasets/RAVDESS__LD/Test_set"
         dim_image: 32
-        min_frames: 10
-        classes : 7 
+        min_frames: 50
+        classes : 8 
     
 model_params:
     temperature: 0.07
     backbone: "resnet"
 
 training:
-    lr_encoder : 0.01
+    lr_encoder : 0.001
     lr_linear : 0.001
     batch_size : 32          
     wd : 0.001
@@ -24,4 +24,4 @@ training:
     classes : 7
     num_workers : 4
     log_model: 20
-    contrastive: True
+    contrastive: False 

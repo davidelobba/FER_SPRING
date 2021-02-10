@@ -1,3 +1,13 @@
+import torch
+from torch.utils.data import Dataset
+import os
+import json
+from random import randint
+from torch import nn
+from torch.nn import functional as F
+import pandas as pd 
+import numpy as np
+
 def make_dataset(directory, class_to_idx):
     instances = []
     directory = os.path.expanduser(directory)
@@ -53,19 +63,25 @@ class RAVDESS_LANDMARK(Dataset):
 
     def __getitem__(self, index: int):
         path, target  = self.samples[index][0], self.samples[index][1]
-        with open(path) as json_file:
-            data = json.load(json_file)
-        ## for the time being just slice 
-        ld = torch.Tensor(data["landmark"])
-        #pad if the are not enough frames
+        data = pd.read_csv(path)
+        
+        kx = data.iloc[:,297:365].to_numpy()
+        ky = data.iloc[:,365:433].to_numpy()
+        
+        kx = (kx - np.min(kx))/np.ptp(kx)
+        ky = (ky - np.min(ky))/np.ptp(ky)    
+        
+        ld = np.array([kx,ky]).T
+        ld = torch.Tensor(np.rollaxis(ld, 1, 0))
         num_frames = ld.shape[0] 
+        
         if num_frames < self.min_frames:
             pad = self.min_frames - num_frames
-            ld = torch.cat((ld,ld[ld.shape[0]-1].repeat(pad,1,1), 0))
+            ld = torch.cat((ld,ld[ld.shape[0]-1].repeat(pad,1,1)), 0)
         
         if num_frames > self.min_frames:
             start_frame =  randint(0, num_frames-self.min_frames)
         else:
             start_frame = 0 
     
-        return target, ld[start_frame: start_frame+self.min_frames]
+        return target, ld[start_frame: start_frame+self.min_frames,17:,: ]

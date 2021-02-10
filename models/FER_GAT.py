@@ -1,6 +1,11 @@
 from dgl.nn.pytorch import GATConv
 from dgl import DGLGraph
 import dgl
+import json
+import torch 
+from random import randint
+from torch import nn
+from torch.nn import functional as F
 
 from scipy.spatial import distance
 
@@ -79,7 +84,7 @@ class GAT(nn.Module):
         self.layer2 = MultiHeadGATLayer(g, hidden_dim * num_heads, out_dim, 1)
 
     def forward(self, feat):
-        out = torch.Tensor([])
+        out = torch.Tensor([]).to(feat.device)
         for batch_idx in range(feat.shape[0]):
             h = self.layer1(feat[batch_idx])
             h = F.elu(h)
@@ -90,7 +95,7 @@ class GAT(nn.Module):
 
 
 class FER_GAT(nn.Module):
-    def __init__(self, out_gat: int = 128, num_of_ld=51, in_dim=128, hidden_dim=64, 
+    def __init__(self, out_gat: int = 128, num_of_ld=51, num_frames=128, hidden_dim=64, 
                  memory_attended=True, att_head=4, lstm_dim = 32, n_classes=8, device="cpu"):
         
         super().__init__()
@@ -111,13 +116,15 @@ class FER_GAT(nn.Module):
         
         self.lstm_encoder = nn.LSTM(2, lstm_dim, 2, batch_first = True, dropout=0.1)
         self.gat = GAT(G,
-                       in_dim=800,
+                       in_dim=lstm_dim,
                        hidden_dim=hidden_dim,
                        out_dim=out_gat,
                        num_heads=att_head)
         
+        self.fc1 = nn.Linear(out_gat*num_of_ld,512)
+        self.fc2 = nn.Linear(512, n_classes)
 
-        self.fc = nn.Linear(out_gat*num_of_ld, n_classes)
+        #self.soft = nn.Softmax(dim=1)
 
     def forward(self, features) -> torch.Tensor:
         
@@ -125,10 +132,13 @@ class FER_GAT(nn.Module):
         extracted = torch.tensor([]).to(features.device)
         
         for idx in range(features.shape[2]):
-            out , _ = lstm_encoder(sample[:,:,idx,:].permute(1,0,2))            
-            extracted = torch.cat((extracted, out.permute(1,0,2).unsqueeze(1)),1)
-        
+            out , _ = self.lstm_encoder(features[:,:,idx,:].permute(1,0,2))            
+            extracted = torch.cat((extracted, out.permute(1,0,2)[:,-1,:].unsqueeze(1)),1)
+        #print(extracted.flatten(start_dim=2).shape)
         feat = self.gat(extracted.flatten(start_dim=2))
-        out = self.fc(feat.flatten(start_dim=1))
+        #print(feat.flatten(start_dim=1).shape)
+        out = F.elu(self.fc1(feat.flatten(start_dim=1)))
+        out = self.fc2(out)
+        #out = self.soft(out)
 
         return out
