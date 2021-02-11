@@ -51,7 +51,6 @@ def main(args):
         linear = linear.to(args.device)
     else:
         #model = FER_GAT(device=args.device, num_frames=config["dataset"]["train"]["min_frames"])
-
         #num_nodes, num_features, num_timesteps_input, num_timesteps_output
         num_nodes = 51
         model = STGCN(num_nodes,2,config["dataset"]["train"]["min_frames"],8, config["dataset"]["train"]["classes"])
@@ -80,7 +79,7 @@ def main(args):
         train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss, classifier_loss, wandb, epochs=config["training"]["epochs"], device=args.device, test=True, loader_test=loader_test, log_model=config["training"]["log_model"], output_dir=args.output)
     else:
         from train_model_graph import train
-        train(model,loader_train, optimizer, classifier_loss, wandb, epochs=config["training"]["epochs"], device=args.device, test=True, loader_test=loader_test, log_model=config["training"]["log_model"], output_dir=args.output, adj=config["model_params"]["adj_matr"])
+        train(model,loader_train, optimizer, classifier_loss, wandb, epochs=config["training"]["epochs"], device=args.device, test=True, loader_test=loader_test, log_model=config["training"]["log_model"], output_dir=args.output, adj=config["model_params"]["adj_matr"], config_file=args.config)
  
 
 if __name__ == '__main__':

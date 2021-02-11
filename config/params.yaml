@@ -1,0 +1,27 @@
+dataset:
+    train:
+        path : "/home/riccardo/CAER_crop/validation"
+        dim_image: 32
+        min_frames: 10
+        classes : 7
+    test: 
+        path : "/home/riccardo/CAER_crop/test"
+        dim_image: 32
+        min_frames: 10
+        classes : 7 
+    
+model_params:
+    temperature: 0.07
+    backbone: "resnet"
+
+training:
+    lr_encoder : 0.01
+    lr_linear : 0.001
+    batch_size : 32          
+    wd : 0.001
+    momentum : 0.9
+    epochs : 100
+    classes : 7
+    num_workers : 4
+    log_model: 20
+    contrastive: True

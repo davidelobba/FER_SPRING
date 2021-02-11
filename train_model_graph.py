@@ -5,8 +5,10 @@ import os
 from time import gmtime, strftime
 from models.STGCN import get_normalized_adj
 import numpy as np 
+from shutil import copyfile
 
-def train(model, loader_train, optimizer, classifier_loss, wandb,epochs=200,device="cuda:2", test=False, loader_test=None, log_model=20, output_dir=None, adj=None):
+
+def train(model, loader_train, optimizer, classifier_loss, wandb,epochs=200,device="cuda:2", test=False, loader_test=None, log_model=20, output_dir=None, adj=None, config_file=None):
     
     e = 0
     log_dir =  strftime("%d-%m-%y %H:%M:%S", gmtime())
@@ -14,7 +16,9 @@ def train(model, loader_train, optimizer, classifier_loss, wandb,epochs=200,devi
     if not os.path.exists(output_dir):
         print(f"{output_dir} directory created")
         os.makedirs(output_dir)    
-        os.makedirs(os.path.join(output_dir,"graph"))    
+        os.makedirs(os.path.join(output_dir,"graph"))   
+        # copy the params file in the ouput directory
+        copyfile(config_file, os.path.join(output_dir,"graph","params.yaml"))
 
     model.train()
 
@@ -63,5 +67,9 @@ def train(model, loader_train, optimizer, classifier_loss, wandb,epochs=200,devi
             wandb.log({"Test_Accuracy": test_accuracy ,  "Test_Total Loss": test_loss})
         print('\t Training loss {:.5f}, Training accuracy {:.2f}'.format(final_loss,  accuracy))
         wandb.log({"Accuracy": accuracy, "Total Loss": final_loss})
+    
+    ## save last model version
+    filename = os.path.join(output_dir,"graph","graph_epoch_"+str(e)+".pth")
+    torch.save(model.state_dict(), filename)
 
 
