@@ -126,18 +126,24 @@ class STGCN(nn.Module):
         self.last_temporal = TimeBlock(in_channels=64, out_channels=64)
         self.fully = nn.Linear((num_timesteps_input - 2 * 5) * 64,
                                num_timesteps_output)
+
+        self.edge_importance1 = nn.Parameter(torch.ones((51,51)))
+        self.edge_importance2 = nn.Parameter(torch.ones((51,51)))
+
         self.fc_out = nn.Linear(num_nodes*num_timesteps_output,num_classes)
 
-    def forward(self, A_hat, X):
+    def forward(self, A_hat, X, eval=False):
         """
         :param X: Input data of shape (batch_size, num_nodes, num_timesteps,
         num_features=in_channels).
         :param A_hat: Normalized adjacency matrix.
         """
-        out1 = self.block1(X.permute(0,2,1,3), A_hat)
-        out2 = self.block2(out1, A_hat)
+        out1 = self.block1(X.permute(0,2,1,3), A_hat * self.edge_importance1)
+        out2 = self.block2(out1, A_hat *  self.edge_importance1)
         out3 = self.last_temporal(out2)
         out4 = self.fully(out3.reshape((out3.shape[0], out3.shape[1], -1)))
         out4 = self.fc_out(out4.flatten(start_dim=1))
+        if eval:
+            out4 = F.softmax(out4)
         return out4
     

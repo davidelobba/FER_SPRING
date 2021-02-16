@@ -79,10 +79,9 @@ class CAER_LANDMARK(Dataset):
         ld = torch.Tensor(np.rollaxis(norm_ld,1,0))
 
         num_frames = ld.shape[0] 
-        
         if num_frames < self.min_frames:
             pad = self.min_frames - num_frames
-            ld = torch.cat((ld,ld[ld.shape[0]-1].repeat(pad,1,1), 0))
+            ld = torch.cat((ld,ld[ld.shape[0]-1].repeat(pad,1,1) ), 0)
 
         if num_frames > self.min_frames:
             start_frame =  randint(0, num_frames-self.min_frames)
@@ -90,6 +89,6 @@ class CAER_LANDMARK(Dataset):
             start_frame = 0 
 
         if self.test:
-            start_frame =num_frames - self.min_frames
+            start_frame = ld.shape[0] - self.min_frames
     
         return target, ld[start_frame: start_frame+self.min_frames,17:,: ]

@@ -1,5 +1,7 @@
 import torch
 from tqdm import tqdm
+from sklearn.metrics import precision_recall_fscore_support
+import numpy as np
 
 def evaluate_model(encoder, linear, data_loader, encoder_loss, classifier_loss,device='cuda:0'):
     samples = 0.
@@ -50,6 +52,10 @@ def evaluate_model_graph(model,data_loader,  classifier_loss,device='cuda:0', ad
     cumulative_ce_loss = 0.
     cumulative_accuracy = 0.
 
+    label_pred = [0,0,0,0,0,0,0,0]
+    label_pred_count = [0,0,0,0,0,0,0,0]
+    label_count = [0,0,0,0,0,0,0,0]
+
     model.eval()
     with torch.no_grad():
         for _ , (target,ld) in enumerate(tqdm(data_loader)):
@@ -64,12 +70,18 @@ def evaluate_model_graph(model,data_loader,  classifier_loss,device='cuda:0', ad
             samples+=batch_size
             cumulative_loss += loss.item()
             _, predicted = logits.max(1)
+            
+            for i in range(predicted.shape[0]):
+                if predicted[i] == target[i]:
+                    label_pred[predicted[i]] +=1
+                label_count[target[i]] +=1
+                label_pred_count[predicted[i]] += 1
+
             cumulative_accuracy += predicted.eq(target).sum().item()
-            #print(f"predicted {predicted} target {target}")
+
 
     final_loss = cumulative_loss/samples
     accuracy = cumulative_accuracy/samples*100
 
     model.train()
-
-    return final_loss,  accuracy 
+    return final_loss,  accuracy, np.array(label_pred), np.array(label_pred_count), np.array(label_count)

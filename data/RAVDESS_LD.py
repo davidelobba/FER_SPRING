@@ -24,7 +24,7 @@ def make_dataset(directory, class_to_idx):
     return instances
 
 class RAVDESS_LANDMARK(Dataset):
-    def __init__(self, root, min_frames=25, test=False):
+    def __init__(self, root, min_frames=25, test=False, zero_start=False):
         super(RAVDESS_LANDMARK, self).__init__()
         self.root = root
         classes, class_to_idx = self._find_classes(self.root)
@@ -37,6 +37,7 @@ class RAVDESS_LANDMARK(Dataset):
         self.samples = samples
         self.min_frames = min_frames
         self.test = test
+        self.zero_start = zero_start
         
 
     def __len__(self):
@@ -78,14 +79,17 @@ class RAVDESS_LANDMARK(Dataset):
         
         if num_frames < self.min_frames:
             pad = self.min_frames - num_frames
-            ld = torch.cat((ld,ld[ld.shape[0]-1].repeat(pad,1,1)), 0)
+            #ld = torch.cat((ld,ld[ld.shape[0]-1].repeat(pad,1,1)), 0)
+            ld = torch.cat((ld,ld[:pad]), 0)
         
         if num_frames > self.min_frames:
             start_frame =  randint(0, num_frames-self.min_frames)
         else:
             start_frame = 0
-
         if self.test:
             start_frame =num_frames - self.min_frames
-    
+            
+        if self.zero_start:
+            start_frame = 0
+        
         return target, ld[start_frame: start_frame+self.min_frames,17:,: ]

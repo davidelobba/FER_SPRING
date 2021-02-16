@@ -1,14 +1,17 @@
 dataset:
     train:
-        path : "/home/riccardo/Datasets/CAER_LD/Training_set"
+        path : "/home/riccardo/Datasets/CAER_LD/train"
         dim_image: 32
         min_frames: 80
-        classes : 8
+        classes : 7
+        zero_start: True
+
     test: 
-        path : "/home/riccardo/Datasets/CAER_LD/Test_set"
+        path : "/home/riccardo/Datasets/CAER_LD/test"
         dim_image: 32
         min_frames: 80
-        classes : 8 
+        classes : 7
+        zero_start: True
     
 model_params:
     temperature: 0.07
@@ -21,8 +24,8 @@ training:
     batch_size : 32          
     wd : 0.001
     momentum : 0.9
-    epochs : 100
-    classes : 8
+    epochs : 500
+    classes : 7
     num_workers : 4
     log_model: 20
     contrastive: False 
