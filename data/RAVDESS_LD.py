@@ -24,7 +24,7 @@ def make_dataset(directory, class_to_idx):
     return instances
 
 class RAVDESS_LANDMARK(Dataset):
-    def __init__(self, root, min_frames=25, test=False, zero_start=False):
+    def __init__(self, root, min_frames=25, test=False, zero_start=False, contrastive=False, mixmatch=False, random_aug=False):
         super(RAVDESS_LANDMARK, self).__init__()
         self.root = root
         classes, class_to_idx = self._find_classes(self.root)
@@ -38,7 +38,9 @@ class RAVDESS_LANDMARK(Dataset):
         self.min_frames = min_frames
         self.test = test
         self.zero_start = zero_start
-        
+        self.contrastive = contrastive
+        self.mixmatch = mixmatch
+        self.random_aug = random_aug
 
     def __len__(self):
             return len(self.samples)
@@ -66,6 +68,8 @@ class RAVDESS_LANDMARK(Dataset):
     def __getitem__(self, index: int):
         path, target  = self.samples[index][0], self.samples[index][1]
         data = pd.read_csv(path)
+
+        noise = torch.normal(mean=torch.arange(0.5), std=torch.arange(0.1, 0, -0.1))
         
         kx = data.iloc[:,297:365].to_numpy()
         ky = data.iloc[:,365:433].to_numpy()
@@ -86,10 +90,37 @@ class RAVDESS_LANDMARK(Dataset):
             start_frame =  randint(0, num_frames-self.min_frames)
         else:
             start_frame = 0
+        
         if self.test:
-            start_frame =num_frames - self.min_frames
-            
+            start_frame = 0 
+
         if self.zero_start:
             start_frame = 0
-        
-        return target, ld[start_frame: start_frame+self.min_frames,17:,: ]
+
+        if self.contrastive:
+            # in case of contrastive return two version sampled in different situation
+            if num_frames > self.min_frames:
+                start_frame_2 =  randint(0, num_frames-self.min_frames)
+            else:
+                start_frame_2 = 0
+            return target, ld[start_frame: start_frame+self.min_frames,17:,: ], ld[start_frame_2: start_frame_2+self.min_frames,17:,: ]
+        else:
+            # for sure not the best way to do 
+            if self.mixmatch:
+                ld =  ld[start_frame: start_frame+self.min_frames,17:,: ]
+                ld_vflip  = ld.clone()
+                ld_vflip[:,:,0] = 1 - ld_vflip[:,:,0]
+                ld_noise = ld.clone() + noise
+                out = torch.cat((ld.unsqueeze(0), ld_vflip.unsqueeze(0), ld_noise.unsqueeze(0)),0)
+
+                return target, out
+            elif self.random_aug and not self.test:
+                ld =  ld[start_frame: start_frame+self.min_frames,17:,: ]
+                ld_vflip  = ld.clone()
+                ld_vflip[:,:,0] = 1 - ld_vflip[:,:,0]
+                ld_noise = ld.clone() + noise
+                out = torch.cat((ld.unsqueeze(0), ld_vflip.unsqueeze(0), ld_noise.unsqueeze(0)),0)
+
+                idx = randint(0,2)
+                return target, out[idx]
+            return target, ld[start_frame: start_frame+self.min_frames,17:,: ]

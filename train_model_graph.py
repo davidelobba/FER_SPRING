@@ -5,6 +5,7 @@ import os
 from time import gmtime, strftime
 from models.STGCN import get_normalized_adj
 import numpy as np 
+import yaml
 from shutil import copyfile
 
 
@@ -18,12 +19,16 @@ def train(model, loader_train, optimizer, classifier_loss, wandb,epochs=200,devi
         os.makedirs(output_dir)    
         os.makedirs(os.path.join(output_dir,"graph"))   
         # copy the params file in the ouput directory
-        copyfile(config_file, os.path.join(output_dir,"graph","params.yaml"))
+        copyfile(config_file, os.path.join(output_dir,"params.yaml"))
 
     model.train()
+    with open(config_file) as f:
+        conf = yaml.safe_load(f)
+    augmented = conf["training"]["augmented"]
 
     with open(adj, 'rb') as f:
         A = np.load(f)
+
     A_hat = torch.Tensor(get_normalized_adj(A)).to(device)
     for e in range(epochs):
 
@@ -40,17 +45,16 @@ def train(model, loader_train, optimizer, classifier_loss, wandb,epochs=200,devi
         print(f"Epoch -  {e}")
 
         for batch_idx, (targets, ld) in enumerate(tqdm(loader_train)):
-            
             targets, ld = targets.to(device), ld.to(device)
 
             # Forward pass
             if sklt:
-                print(ld.shape)
                 logits = model(ld.permute(0,3,1,2).unsqueeze(4))
                 #logits = model(ld.unsqueeze(.unsqueeze(4)))
             else:
-                logits = model(A_hat,ld)
-            loss = classifier_loss(logits, targets)
+                logits = model(A_hat,ld, augmented=augmented)
+            
+            loss = classifier_loss(logits, targets)            
             # compute loss 
             optimizer.zero_grad()
             loss.backward()
@@ -80,10 +84,10 @@ def train(model, loader_train, optimizer, classifier_loss, wandb,epochs=200,devi
                     'loss': final_loss,
                     }, filename)
 
-                    
+
         # test performance over the test set    
         if test:
-            test_loss, test_accuracy, label_pred_correct, label_pred_count, label_tot_count = evaluate_model_graph(model, loader_test, classifier_loss, device=device, adj=A_hat)
+            test_loss, test_accuracy, label_pred_correct, label_pred_count, label_tot_count = evaluate_model_graph(model, loader_test, classifier_loss, device=device, adj=A_hat,augmented=augmented)
             print('\t Test loss {:.5f},  Test accuracy {:.2f}'.format(test_loss, test_accuracy))
             if wandb is not None:
                 wandb.log({"Test_Accuracy": test_accuracy ,  "Test_Total Loss": test_loss})

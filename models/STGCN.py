@@ -109,7 +109,7 @@ class STGCN(nn.Module):
     """
 
     def __init__(self, num_nodes, num_features, num_timesteps_input,
-                 num_timesteps_output,num_classes):
+                 num_timesteps_output,num_classes=8, edge_weight=False, contrastive=False):
         """
         :param num_nodes: Number of nodes in the graph.
         :param num_features: Number of features at each node in each time step.
@@ -127,23 +127,58 @@ class STGCN(nn.Module):
         self.fully = nn.Linear((num_timesteps_input - 2 * 5) * 64,
                                num_timesteps_output)
 
-        self.edge_importance1 = nn.Parameter(torch.ones((51,51)))
-        self.edge_importance2 = nn.Parameter(torch.ones((51,51)))
+        if edge_weight:
+            self.edge_importance1 = nn.Parameter(torch.ones((51,51)))
+            self.edge_importance2 = nn.Parameter(torch.ones((51,51)))
+        else:
+            self.edge_importance1 = 1 #torch.ones((51,51))
+            self.edge_importance2 = 1 #torch.ones((51,51))
+        self.contrastive = contrastive
+        if not self.contrastive:
+            self.fc_out = nn.Linear(num_nodes*num_timesteps_output,num_classes)
+        else:
+            self.fc_out = nn.Linear(num_nodes*num_timesteps_output,num_classes)
 
-        self.fc_out = nn.Linear(num_nodes*num_timesteps_output,num_classes)
-
-    def forward(self, A_hat, X, eval=False):
+    def forward(self, A_hat, X, eval=False, augmented=False):
         """
         :param X: Input data of shape (batch_size, num_nodes, num_timesteps,
         num_features=in_channels).
         :param A_hat: Normalized adjacency matrix.
         """
-        out1 = self.block1(X.permute(0,2,1,3), A_hat * self.edge_importance1)
-        out2 = self.block2(out1, A_hat *  self.edge_importance1)
-        out3 = self.last_temporal(out2)
-        out4 = self.fully(out3.reshape((out3.shape[0], out3.shape[1], -1)))
-        out4 = self.fc_out(out4.flatten(start_dim=1))
-        if eval:
-            out4 = F.softmax(out4)
-        return out4
+        if augmented:
+            #loop over the augmentation
+            out = torch.Tensor([]).to(X.device)
+            for idx in range(X.shape[1]):
+                inp = X[:,idx]
+                out1 = self.block1(inp.permute(0,2,1,3), A_hat * self.edge_importance1)
+                out2 = self.block2(out1, A_hat *  self.edge_importance1)
+                out3 = self.last_temporal(out2)
+                out4 = self.fully(out3.reshape((out3.shape[0], out3.shape[1], -1)))
+                out4 = self.fc_out(out4.flatten(start_dim=1))
+                if eval:
+                    out4 = F.softmax(out4)
+                out = torch.cat((out,out4.unsqueeze(1)),1)
+            return out.mean(1) #F.sigmoid()
+
+        else:
+            out1 = self.block1(X.permute(0,2,1,3), A_hat * self.edge_importance1)
+            out2 = self.block2(out1, A_hat *  self.edge_importance1)
+            out3 = self.last_temporal(out2)
+            print(out2.shape)
+            print(out3.shape)
+
+            out4 = self.fully(out3.reshape((out3.shape[0], out3.shape[1], -1)))
+            if not self.contrastive:
+                out4 = self.fc_out(out4.flatten(start_dim=1))
+                if eval:
+                    out4 = F.softmax(out4)
+                return out4 #F.sigmoid()
+            else:
+                outputs = self.fc_out(out4.flatten(start_dim=1))
+                return outputs, out4.flatten(start_dim=1)
+
+        
+
+
+
     
