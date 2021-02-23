@@ -1,17 +1,11 @@
 dataset:
-    train:
-        path : "/home/riccardo/Datasets/RAVDESS_LD10/Training_set"
-        dim_image: 32
-        min_frames: 90
-        classes : 8
-        zero_start: False
-    test: 
-        path : "/home/riccardo/Datasets/RAVDESS_LD10/Test_set"
-        dim_image: 32
-        min_frames: 90
-        classes : 8
-        zero_start: False 
-    
+    path : "/home/riccardo/Datasets/RAVDESS_LD_COMPLETE/"
+    path_audio : "/home/riccardo/Datasets/RAVDESS_AUDIO_COMPLETE/"
+    min_frames: 90
+    classes : 8
+    zero_start: False
+    split_percentage: 0.9
+
 model_params:
     temperature: 0.07
     feat_out: 8
@@ -22,7 +16,7 @@ model_params:
 training:
     lr_encoder : 0.001
     lr_linear : 0.001
-    batch_size : 128          
+    batch_size : 64          
     wd : 0.001
     momentum : 0.9
     epochs : 400
@@ -30,7 +24,7 @@ training:
     num_workers : 4
     log_model: 20
     contrastive: False
-    random_aug: True 
+    random_aug: False
     augmented: False
     drop_kp: False
     focal: False 

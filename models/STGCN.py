@@ -137,7 +137,8 @@ class STGCN(nn.Module):
         if not self.contrastive:
             self.fc_out = nn.Linear(num_nodes*num_timesteps_output,num_classes)
         else:
-            self.fc_out = nn.Linear(num_nodes*num_timesteps_output,num_classes)
+            self.fc_out = torch.nn.Sequential(torch.nn.Linear(num_nodes*num_timesteps_output, 512),torch.nn.ReLU(),torch.nn.Linear(512, num_classes))
+            #self.fc_out = nn.Linear(num_nodes*num_timesteps_output,num_classes)
 
     def forward(self, A_hat, X, eval=False, augmented=False):
         """
@@ -164,10 +165,8 @@ class STGCN(nn.Module):
             out1 = self.block1(X.permute(0,2,1,3), A_hat * self.edge_importance1)
             out2 = self.block2(out1, A_hat *  self.edge_importance1)
             out3 = self.last_temporal(out2)
-            print(out2.shape)
-            print(out3.shape)
-
             out4 = self.fully(out3.reshape((out3.shape[0], out3.shape[1], -1)))
+
             if not self.contrastive:
                 out4 = self.fc_out(out4.flatten(start_dim=1))
                 if eval:
@@ -175,7 +174,7 @@ class STGCN(nn.Module):
                 return out4 #F.sigmoid()
             else:
                 outputs = self.fc_out(out4.flatten(start_dim=1))
-                return outputs, out4.flatten(start_dim=1)
+                return torch.nn.functional.normalize(outputs), torch.nn.functional.normalize(out4.flatten(start_dim=1))
 
         
 

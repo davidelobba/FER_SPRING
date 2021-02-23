@@ -5,6 +5,8 @@ import numpy as np
 
 def evaluate_model_contrastive(encoder, linear, data_loader, encoder_loss, classifier_loss,A_hat,device='cuda:0'):
     samples = 0.
+    batch_count =0
+
     cumulative_loss = 0.
     cumulative_contr_loss = 0.
     cumulative_ce_loss = 0.
@@ -26,7 +28,7 @@ def evaluate_model_contrastive(encoder, linear, data_loader, encoder_loss, class
             
             q1, vf_q1 = encoder(A_hat, ld_1)
             q2, vf_q2 = encoder(A_hat, ld_2)
-            contr_feat = torch.cat((vf_q1.unsqueeze(1),vf_q2.unsqueeze(1)),1)
+            contr_feat = torch.cat((q1.unsqueeze(1),q2.unsqueeze(1)),1)
 
 
             contr_loss = encoder_loss(contr_feat, targets)
@@ -52,8 +54,15 @@ def evaluate_model_contrastive(encoder, linear, data_loader, encoder_loss, class
 
             loss = contr_loss + ce_loss
 
+            print(targets.shape)
+
             batch_size = ld_1.shape[0]
             samples+=batch_size
+
+            print(batch_size)
+            print(samples)
+            batch_count +=1
+
             cumulative_loss += loss.item()
             cumulative_contr_loss += contr_loss.item() # Note: the .item() is needed to extract scalars from tensors
             cumulative_ce_loss += ce_loss.item() # Note: the .item() is needed to extract scalars from tensors
@@ -66,9 +75,9 @@ def evaluate_model_contrastive(encoder, linear, data_loader, encoder_loss, class
                 label_count[targets[i]] +=1
                 label_pred_count[predicted[i]] += 1
 
-    final_loss = cumulative_loss/samples
-    final_contr_loss = cumulative_contr_loss/samples
-    final_ce_loss = cumulative_ce_loss/samples
+    final_loss = cumulative_loss/batch_count
+    final_contr_loss = cumulative_contr_loss/batch_count
+    final_ce_loss = cumulative_ce_loss/batch_count
     accuracy = cumulative_accuracy/samples*100
 
     encoder.train()
@@ -78,6 +87,7 @@ def evaluate_model_contrastive(encoder, linear, data_loader, encoder_loss, class
 
 def evaluate_model_graph(model,data_loader,  classifier_loss,device='cuda:0', adj=None, augmented=False):
     samples = 0.
+    batch_count = 0
     cumulative_loss = 0.
     cumulative_contr_loss = 0.
     cumulative_ce_loss = 0.
@@ -98,6 +108,7 @@ def evaluate_model_graph(model,data_loader,  classifier_loss,device='cuda:0', ad
 
             batch_size = ld.shape[0]
             samples+=batch_size
+            batch_count +=1
             cumulative_loss += loss.item()
             _, predicted = logits.max(1)
             
@@ -110,7 +121,7 @@ def evaluate_model_graph(model,data_loader,  classifier_loss,device='cuda:0', ad
             cumulative_accuracy += predicted.eq(target).sum().item()
 
 
-    final_loss = cumulative_loss/samples
+    final_loss = cumulative_loss/batch_count
     accuracy = cumulative_accuracy/samples*100
 
     model.train()

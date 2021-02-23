@@ -26,10 +26,13 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
     with open(adj, 'rb') as f:
             A = np.load(f)
     A_hat = torch.Tensor(get_normalized_adj(A)).to(device)
+
+    optimizer_encoder, optimizer_decoder = optimizer[0], optimizer[1]
     
     for e in range(epochs):
 
         samples = 0.
+        batch_count = 0
         cumulative_loss = 0.
         cumulative_contr_loss = 0.
         cumulative_ce_loss = 0.
@@ -48,7 +51,7 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
             #contr_feat, contr_tar, video_features = moco_encoder(ld_1,ld_2,targets, train=True)
             q1, vf_q1 = moco_encoder(A_hat, ld_1)
             q2, vf_q2 = moco_encoder(A_hat, ld_2)
-            contr_feat = torch.cat((vf_q1.unsqueeze(1),vf_q2.unsqueeze(1)),1)
+            contr_feat = torch.cat((q1.unsqueeze(1),q2.unsqueeze(1)),1)
             #print(contr_feat.shape)
             contr_loss = encoder_loss(contr_feat, targets)
             video_feat = torch.cat((vf_q1.detach(),vf_q2.detach()),0)
@@ -56,6 +59,7 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
             #print(contr_feat.shape)
             #print(contr_tar.shape)
             #print(video_feat.shape)
+
             logits = linear(video_feat)
             #logits = q1 #contr_feat[:,0,:]
             #video_features = video_features.detach()
@@ -69,13 +73,16 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
             loss = contr_loss + ce_loss
             #print(loss)
 
-
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
+            optimizer_encoder.zero_grad()
+            optimizer_decoder.zero_grad()
+            contr_loss.backward()
+            ce_loss.backward()
+            optimizer_encoder.step()
+            optimizer_decoder.step()
+        
             batch_size = ld_1.shape[0]
             samples += batch_size*2
+            batch_count +=1
             cumulative_loss += loss.item()
             cumulative_contr_loss += contr_loss.item() # Note: the .item() is needed to extract scalars from tensors
             cumulative_ce_loss += ce_loss.item() # Note: the .item() is needed to extract scalars from tensors
@@ -90,17 +97,30 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
                 train_label_pred_count[predicted[i]] += 1
 
 
-        final_loss = cumulative_loss/samples
-        final_contr_loss = cumulative_contr_loss/samples
-        final_ce_loss = cumulative_ce_loss/samples
+        final_loss = cumulative_loss/batch_count
+        final_contr_loss = cumulative_contr_loss/batch_count
+        final_ce_loss = cumulative_ce_loss/batch_count
         accuracy = cumulative_accuracy/samples*100
 
         if e % log_model == 0:  
             filename = os.path.join(output_dir,"encoder","encoder_epoch_"+str(e)+".pth")
-            torch.save(moco_encoder.state_dict(), filename)
-
+            torch.save({
+                'epoch': e,
+                'model_state_dict': moco_encoder.state_dict(),
+                'optimizer_state_dict': optimizer_encoder.state_dict(),
+                'loss': final_loss,
+                }, filename)
             filename = os.path.join(output_dir,"linear","linear_epoch_"+str(e)+".pth")
-            torch.save(linear.state_dict(), filename)
+            torch.save({
+                'epoch': e,
+                'model_state_dict': linear.state_dict(),
+                'optimizer_state_dict': optimizer_decoder.state_dict(),
+                'loss': final_loss,
+                }, filename)
+
+
+
+
 
         # test performance over the test set    
         if test:

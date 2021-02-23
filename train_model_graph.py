@@ -37,6 +37,8 @@ def train(model, loader_train, optimizer, classifier_loss, wandb,epochs=200,devi
         cumulative_contr_loss = 0.
         cumulative_ce_loss = 0.
         cumulative_accuracy = 0.
+        batch_count =0
+
 
         train_label_pred = [0,0,0,0,0,0,0,0]
         train_label_pred_count = [0,0,0,0,0,0,0,0]
@@ -62,6 +64,8 @@ def train(model, loader_train, optimizer, classifier_loss, wandb,epochs=200,devi
 
             batch_size = ld.shape[0]
             samples+=batch_size 
+            batch_count += 1
+
             cumulative_loss += loss.item()
             _, predicted = logits.max(1)
             cumulative_accuracy += predicted.eq(targets).sum().item()
@@ -72,7 +76,7 @@ def train(model, loader_train, optimizer, classifier_loss, wandb,epochs=200,devi
                 train_label_pred_count[predicted[i]] += 1
 
 
-        final_loss = cumulative_loss/samples
+        final_loss = cumulative_loss/batch_count
         accuracy = cumulative_accuracy/samples*100
 
         if e % log_model == 0:  
@@ -83,7 +87,6 @@ def train(model, loader_train, optimizer, classifier_loss, wandb,epochs=200,devi
                     'optimizer_state_dict': optimizer.state_dict(),
                     'loss': final_loss,
                     }, filename)
-
 
         # test performance over the test set    
         if test:
