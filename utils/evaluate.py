@@ -21,7 +21,7 @@ def evaluate_model_contrastive(encoder, linear, data_loader, encoder_loss, class
     with torch.no_grad():
         for _ , (targets,ld_1, ld_2 ) in enumerate(tqdm(data_loader)):
 
-            targets, ld_1, ld_2  =  targets.to(device),ld_1.to(device), ld_2.to(device)
+            targets, ld_1,ld_2  =  targets.to(device),ld_1.to(device), ld_2.to(device)
 
             # Forward pass
             #contr_feat, contr_tar, video_features = encoder(ld_1,ld_2,targets,train=False)                
@@ -32,7 +32,7 @@ def evaluate_model_contrastive(encoder, linear, data_loader, encoder_loss, class
 
 
             contr_loss = encoder_loss(contr_feat, targets)
-            video_feat = torch.cat((vf_q1.detach(),vf_q2.detach()),0)
+            video_feat = vf_q1.detach()
             #print(contr_feat.shape)
             #print(contr_tar.shape)
             #print(video_feat.shape)
@@ -41,9 +41,8 @@ def evaluate_model_contrastive(encoder, linear, data_loader, encoder_loss, class
             #video_features = video_features.detach()
             #targets = torch.cat([targets,targets], dim = 0)
             #logits = linear(video_features)
-            ce_loss = classifier_loss(logits, torch.cat((targets,targets),0))
-            targets = torch.cat((targets,targets))
-
+            ce_loss = classifier_loss(logits, targets)
+            #targets = torch.cat((targets,targets))
 
             #contr_loss = encoder_loss(contr_feat, targets)
             #logits = contr_feat[:,0,:]
@@ -54,13 +53,9 @@ def evaluate_model_contrastive(encoder, linear, data_loader, encoder_loss, class
 
             loss = contr_loss + ce_loss
 
-            print(targets.shape)
-
             batch_size = ld_1.shape[0]
             samples+=batch_size
 
-            print(batch_size)
-            print(samples)
             batch_count +=1
 
             cumulative_loss += loss.item()

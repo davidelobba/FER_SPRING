@@ -46,8 +46,8 @@ class RAVDESS_LANDMARK(Dataset):
         self.random_aug = random_aug
         self.drop_kp = drop_kp
         self.audio = audio
-        if self.audio:
-            self.preprocess_audio()
+        #if self.audio:
+        #    self.preprocess_audio()
 
     def __len__(self):
             return len(self.samples)
@@ -82,10 +82,10 @@ class RAVDESS_LANDMARK(Dataset):
             #mel_spect = np.array(librosa.feature.melspectrogram(y=data, sr=sampling_rate, n_mels=kx.shape[0])).mean(axis=1)
             
             hop_length = int(len(data)/kx.shape[0])
-            mel_spect = np.array(librosa.feature.melspectrogram(y=data, sr=sampling_rate, hop_length=hop_length, n_mels=128)).mean(0)
+            mel_spect = np.array(librosa.feature.melspectrogram(y=data, sr=sampling_rate, hop_length=hop_length, n_mels=128)) #.mean(0)
             mel_spect = mel_spect[:kx.shape[0]]
-
             new_samples.append( (self.samples[idx][0],self.samples[idx][1],self.samples[idx][2],  mel_spect) ) 
+
         self.samples = new_samples
     
     def get_class_sample_count(self):
@@ -123,7 +123,12 @@ class RAVDESS_LANDMARK(Dataset):
         ky = (ky - np.min(ky))/np.ptp(ky)    
         
         if self.audio:
-            mel_spect = self.samples[index][3]
+            path_audio = self.samples[index][2]
+            data, sampling_rate = librosa.load(path_audio)
+            # mel_spect = self.samples[index][3]
+            # hop_length = int(len(data)/kx.shape[0])
+            # mel_spect = np.array(librosa.feature.melspectrogram(y=data, sr=sampling_rate, hop_length=hop_length, n_mels=128)).mean(0)
+            mel_spect = mel_spect[:kx.shape[0]]
             mel_spect = np.array([np.repeat(mv,68) for mv in mel_spect])
             ld = np.array([kx,ky,mel_spect]).T
         else:

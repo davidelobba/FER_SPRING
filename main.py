@@ -109,6 +109,7 @@ def main(args):
         #optimizer = torch.optim.SGD([{'params': moco_encoder.parameters()},
         #       {'params': linear.parameters(), 'lr': config["training"]["lr_linear"]}], lr=config["training"]["lr_encoder"], weight_decay=config["training"]["wd"], momentum=config["training"]["momentum"]) 
         optimizer_encoder = torch.optim.SGD(encoder.parameters(),config["training"]["lr_encoder"], weight_decay=config["training"]["wd"], momentum=config["training"]["momentum"])
+        ## riduci lr linear
         optimizer_decoder = torch.optim.SGD(linear.parameters(),config["training"]["lr_linear"], weight_decay=config["training"]["wd"], momentum=config["training"]["momentum"])
         scheduler = None #LinearWarmupCosineAnnealingLR(optimizer, warmup_epochs = 5, max_epochs = 150)
     else:

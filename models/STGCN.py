@@ -146,35 +146,19 @@ class STGCN(nn.Module):
         num_features=in_channels).
         :param A_hat: Normalized adjacency matrix.
         """
-        if augmented:
-            #loop over the augmentation
-            out = torch.Tensor([]).to(X.device)
-            for idx in range(X.shape[1]):
-                inp = X[:,idx]
-                out1 = self.block1(inp.permute(0,2,1,3), A_hat * self.edge_importance1)
-                out2 = self.block2(out1, A_hat *  self.edge_importance1)
-                out3 = self.last_temporal(out2)
-                out4 = self.fully(out3.reshape((out3.shape[0], out3.shape[1], -1)))
-                out4 = self.fc_out(out4.flatten(start_dim=1))
-                if eval:
-                    out4 = F.softmax(out4)
-                out = torch.cat((out,out4.unsqueeze(1)),1)
-            return out.mean(1) #F.sigmoid()
+        out1 = self.block1(X.permute(0,2,1,3), A_hat * self.edge_importance1)
+        out2 = self.block2(out1, A_hat *  self.edge_importance1)
+        out3 = self.last_temporal(out2)
+        out4 = self.fully(out3.reshape((out3.shape[0], out3.shape[1], -1)))
 
+        if not self.contrastive:
+            out4 = self.fc_out(out4.flatten(start_dim=1))
+            if eval:
+                out4 = F.softmax(out4)
+            return out4 
         else:
-            out1 = self.block1(X.permute(0,2,1,3), A_hat * self.edge_importance1)
-            out2 = self.block2(out1, A_hat *  self.edge_importance1)
-            out3 = self.last_temporal(out2)
-            out4 = self.fully(out3.reshape((out3.shape[0], out3.shape[1], -1)))
-
-            if not self.contrastive:
-                out4 = self.fc_out(out4.flatten(start_dim=1))
-                if eval:
-                    out4 = F.softmax(out4)
-                return out4 #F.sigmoid()
-            else:
-                outputs = self.fc_out(out4.flatten(start_dim=1))
-                return torch.nn.functional.normalize(outputs), torch.nn.functional.normalize(out4.flatten(start_dim=1))
+            outputs = self.fc_out(out4.flatten(start_dim=1))
+            return torch.nn.functional.normalize(outputs), out4.flatten(start_dim=1)
 
         
 
