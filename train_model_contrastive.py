@@ -6,6 +6,7 @@ from time import gmtime, strftime
 from shutil import copyfile
 import numpy as np
 from models.STGCN import get_normalized_adj
+import yaml
 
 
 def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss, classifier_loss, wandb,epochs=200,device="cuda:2", test=False, loader_test=None, log_model=20, output_dir=None, adj=None, config_file=None, sklt=False):
@@ -27,7 +28,16 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
             A = np.load(f)
     A_hat = torch.Tensor(get_normalized_adj(A)).to(device)
 
+    with open(config_file) as f:
+        conf = yaml.safe_load(f)
+    if conf["training"]["audio_only"]:
+        num_nodes = conf["dataset"]["n_mels"]
+        num_feat_in = 1
+        adj  = np.ones((num_nodes,num_nodes))- np.identity(num_nodes)
+        A_hat = torch.Tensor(get_normalized_adj(adj)).to(device)
+
     optimizer_encoder, optimizer_decoder = optimizer[0], optimizer[1]
+    scheduler_encoder, scheduler_decoder = scheduler[0], scheduler[1]
     
     for e in range(epochs):
 
@@ -43,35 +53,36 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
         train_label_count = [0,0,0,0,0,0,0,0]
         print(f"Epoch -  {e}")
 
-        for batch_idx, (targets,ld_1, ld_2 ) in enumerate(tqdm(loader_train)):
-            
-            targets, ld_1, ld_2  =  targets.to(device),ld_1.to(device), ld_2.to(device)
+        for batch_idx, batch in enumerate(tqdm(loader_train)):
+            if len(batch) ==3:
+                targets, ld_1, ld_2 =  batch[0].to(device),batch[1].to(device), batch[2].to(device)
+            else:
+                targets, ld_1, ld_2, ad_1, ad_2 =  batch[0].to(device), batch[1].to(device), batch[2].to(device), batch[3].to(device),batch[4].to(device)
+
 
             # Forward pass
             #contr_feat, contr_tar, video_features = moco_encoder(ld_1,ld_2,targets, train=True)
-            q1, vf_q1 = moco_encoder(A_hat, ld_1)
-            q2, vf_q2 = moco_encoder(A_hat, ld_2)
+            if len(batch) ==3:
+                q1, vf_q1 = moco_encoder(A_hat, ld_1)
+                q2, vf_q2 = moco_encoder(A_hat, ld_2)
+            else:
+                q1, vf_q1 = moco_encoder(ld_1, ad_1)
+                q2, vf_q2 = moco_encoder(ld_2, ad_2)
+                
             contr_feat = torch.cat((q1.unsqueeze(1),q2.unsqueeze(1)),1)
             #print(contr_feat.shape)
-            contr_loss = encoder_loss(contr_feat, targets)
+            if conf["training"]["unsupervised"]:
+                contr_loss = encoder_loss(contr_feat)
+            else:
+                contr_loss = encoder_loss(contr_feat, targets)
             video_feat = torch.cat((vf_q1.detach(),vf_q2.detach()),0)
             
-            #print(contr_feat.shape)
-            #print(contr_tar.shape)
-            #print(video_feat.shape)
 
             logits = linear(video_feat)
-            #logits = q1 #contr_feat[:,0,:]
-            #video_features = video_features.detach()
-            #targets = torch.cat([targets,targets], dim = 0)
-            #logits = linear(video_features)
             ce_loss = classifier_loss(logits, torch.cat((targets,targets),0))
             targets = torch.cat((targets,targets))
 
-            # compute loss 
-            #print(contr_loss)
             loss = contr_loss + ce_loss
-            #print(loss)
 
             optimizer_encoder.zero_grad()
             optimizer_decoder.zero_grad()
@@ -95,6 +106,9 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
                     train_label_pred[predicted[i]] +=1
                 train_label_count[targets[i]] +=1
                 train_label_pred_count[predicted[i]] += 1
+
+        scheduler_encoder.step()
+        scheduler_decoder.step()
 
 
         final_loss = cumulative_loss/batch_count
@@ -124,7 +138,7 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
 
         # test performance over the test set    
         if test:
-            test_loss, test_contr_loss, test_ce_loss, test_accuracy, label_pred_correct, label_pred_count, label_tot_count = evaluate_model_contrastive(moco_encoder,linear, loader_test, encoder_loss, classifier_loss,A_hat, device=device)
+            test_loss, test_contr_loss, test_ce_loss, test_accuracy, label_pred_correct, label_pred_count, label_tot_count = evaluate_model_contrastive(moco_encoder,linear, loader_test, encoder_loss, classifier_loss,A_hat, device=device, unsupervised=conf["training"]["unsupervised"])
             print('\t Test loss {:.5f}, Test_contr_loss {:.5f}, Test_ce_loss {:.5f}, Test accuracy {:.2f}'.format(test_loss, test_contr_loss, test_ce_loss,test_accuracy))
             if wandb is not None:
                 wandb.log({"Test_Accuracy": test_accuracy , "Test_Contrastive Loss": test_contr_loss, 
@@ -143,6 +157,6 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
             for i in range(len(label_pred_count)):
                 wandb.log({"Train_label_percentage_"+str(label[i]): correct_train[i] }) 
 
-        #scheduler.step()
+        #
 
 

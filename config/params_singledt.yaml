@@ -1,7 +1,8 @@
 dataset:
     path : "/home/riccardo/Datasets/RAVDESS_LD_COMPLETE/"
-    path_audio : "/home/riccardo/Datasets/RAVDESS_AUDIO_COMPLETE/"
+    path_audio : "/home/riccardo/Datasets/RAVDESS_AUDIO_EXTRACTED/"
     min_frames: 90
+    n_mels: 128
     classes : 8
     zero_start: False
     split_percentage: 0.9
@@ -16,15 +17,19 @@ model_params:
 training:
     lr_encoder : 0.001
     lr_linear : 0.001
-    batch_size : 64          
+    batch_size : 64    
+    scheduler_step :  100
+    scheduler_gamma : 0.9    
     wd : 0.001
     momentum : 0.9
-    epochs : 400
+    epochs : 2000
     classes : 8
     num_workers : 4
     log_model: 20
     contrastive: False
+    unsupervised: False
     random_aug: False
     augmented: False
     drop_kp: False
     focal: False 
+    audio_only : True

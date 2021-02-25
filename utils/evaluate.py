@@ -3,7 +3,7 @@ from tqdm import tqdm
 from sklearn.metrics import precision_recall_fscore_support
 import numpy as np
 
-def evaluate_model_contrastive(encoder, linear, data_loader, encoder_loss, classifier_loss,A_hat,device='cuda:0'):
+def evaluate_model_contrastive(encoder, linear, data_loader, encoder_loss, classifier_loss,A_hat,device='cuda:0', unsupervised=False):
     samples = 0.
     batch_count =0
 
@@ -19,17 +19,28 @@ def evaluate_model_contrastive(encoder, linear, data_loader, encoder_loss, class
     encoder.eval()
     linear.eval()
     with torch.no_grad():
-        for _ , (targets,ld_1, ld_2 ) in enumerate(tqdm(data_loader)):
-
-            targets, ld_1,ld_2  =  targets.to(device),ld_1.to(device), ld_2.to(device)
+        for _ , batch in enumerate(tqdm(data_loader)):
+            if len(batch) ==3:
+                targets, ld_1, ld_2 =  batch[0].to(device),batch[1].to(device), batch[2].to(device)
+            else:
+                targets, ld_1, ld_2, ad_1, ad_2 =  batch[0].to(device), batch[1].to(device), batch[2].to(device), batch[3].to(device),batch[4].to(device)
 
             # Forward pass
             #contr_feat, contr_tar, video_features = encoder(ld_1,ld_2,targets,train=False)                
             
-            q1, vf_q1 = encoder(A_hat, ld_1)
-            q2, vf_q2 = encoder(A_hat, ld_2)
+            if len(batch) ==3:
+                q1, vf_q1 = encoder(A_hat, ld_1)
+                q2, vf_q2 = encoder(A_hat, ld_2)
+            else:
+                q1, vf_q1 = encoder(ld_1, ad_1)
+                q2, vf_q2 = encoder(ld_2, ad_2)
+
             contr_feat = torch.cat((q1.unsqueeze(1),q2.unsqueeze(1)),1)
 
+            if unsupervised:
+                contr_loss = encoder_loss(contr_feat)
+            else:
+                contr_loss = encoder_loss(contr_feat, targets)
 
             contr_loss = encoder_loss(contr_feat, targets)
             video_feat = vf_q1.detach()
@@ -80,7 +91,7 @@ def evaluate_model_contrastive(encoder, linear, data_loader, encoder_loss, class
 
     return final_loss, final_contr_loss, final_ce_loss, accuracy, np.array(label_pred), np.array(label_pred_count), np.array(label_count)
 
-def evaluate_model_graph(model,data_loader,  classifier_loss,device='cuda:0', adj=None, augmented=False):
+def evaluate_model_graph(model,data_loader,  classifier_loss,device='cuda:0', adj=None, augmented=False, audio_only= False):
     samples = 0.
     batch_count = 0
     cumulative_loss = 0.
@@ -98,7 +109,10 @@ def evaluate_model_graph(model,data_loader,  classifier_loss,device='cuda:0', ad
 
             target,ld = target.to(device), ld.to(device)
             # Forward pass
-            logits = model(adj,ld,augmented=augmented)
+            if audio_only:
+                logits = model(ld)
+            else:
+                logits = model(adj,ld,augmented=augmented)
             loss = classifier_loss(logits, target)
 
             batch_size = ld.shape[0]

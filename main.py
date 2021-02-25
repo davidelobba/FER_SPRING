@@ -7,10 +7,11 @@ import yaml
 import numpy as np
 
 from models.MoCo import MoCo
-from models.Encoder import EncoderResnet
 from models.FER_GAT import FER_GAT
 from models.STGCN import STGCN, get_normalized_adj
 from models.SKELETON_STGCN import SK_STGCN
+from models.Encoder import Encoder
+from models.AudioEncoder import AudioEncoder
 
 from utils.SupCon import SupConLoss
 from utils.LinearWarmupScheduler import LinearWarmupCosineAnnealingLR
@@ -52,8 +53,8 @@ def main(args):
         audio =False 
         if config["dataset"]["path_audio"] is not None:
             audio =True 
-        dataset_train = RAVDESS_LANDMARK(config["dataset"]["path"], samples=sample_train, min_frames=config["dataset"]["min_frames"],audio=audio, zero_start=config["dataset"]["zero_start"], contrastive=config["training"]["contrastive"],  mixmatch=config["training"]["augmented"], random_aug=config["training"]["random_aug"], drop_kp=config["training"]["drop_kp"])
-        dataset_test = RAVDESS_LANDMARK(config["dataset"]["path"], samples=sample_test, min_frames=config["dataset"]["min_frames"],  test=True, audio=audio,zero_start=config["dataset"]["zero_start"],  contrastive=config["training"]["contrastive"],  mixmatch=config["training"]["augmented"], random_aug=config["training"]["random_aug"])        
+        dataset_train = RAVDESS_LANDMARK(config["dataset"]["path"], samples=sample_train, min_frames=config["dataset"]["min_frames"],n_mels=config["dataset"]["n_mels"],audio=audio, audio_only=config["training"]["audio_only"],zero_start=config["dataset"]["zero_start"], contrastive=config["training"]["contrastive"],  mixmatch=config["training"]["augmented"], random_aug=config["training"]["random_aug"], drop_kp=config["training"]["drop_kp"])
+        dataset_test = RAVDESS_LANDMARK(config["dataset"]["path"], samples=sample_test, min_frames=config["dataset"]["min_frames"],n_mels=config["dataset"]["n_mels"],test=True, audio=audio,audio_only=config["training"]["audio_only"],zero_start=config["dataset"]["zero_start"],  contrastive=config["training"]["contrastive"],  mixmatch=config["training"]["augmented"], random_aug=config["training"]["random_aug"])        
         #dataset_train = RAVDESS_LANDMARK(config["dataset"]["train"]["path"], min_frames=config["dataset"]["train"]["min_frames"], zero_start=config["dataset"]["train"]["zero_start"], contrastive=config["training"]["contrastive"],  mixmatch=config["training"]["augmented"], random_aug=config["training"]["random_aug"], drop_kp=config["training"]["drop_kp"])
         #dataset_test = RAVDESS_LANDMARK(config["dataset"]["test"]["path"], min_frames=config["dataset"]["test"]["min_frames"],  test=True, zero_start=config["dataset"]["train"]["zero_start"],  contrastive=config["training"]["contrastive"],  mixmatch=config["training"]["augmented"], random_aug=config["training"]["random_aug"])
     
@@ -74,47 +75,54 @@ def main(args):
 
     if config["dataset"]["path_audio"] is not None:
         num_feat_in = 3
-
+    if config["training"]["audio_only"]:
+        num_nodes = config["dataset"]["n_mels"]
+        num_feat_in = 1
+    
     if config["training"]["contrastive"]:
-
-        #enc_1 = STGCN(num_nodes,2,config["dataset"]["train"]["min_frames"],config["model_params"]["feat_out"], num_classes=config["dataset"]["train"]["classes"],edge_weight=config["model_params"]["edge_weight"], contrastive=config["training"]["contrastive"])
-        #enc_2 = STGCN(num_nodes,2,config["dataset"]["train"]["min_frames"],config["model_params"]["feat_out"], num_classes=config["dataset"]["train"]["classes"],edge_weight=config["model_params"]["edge_weight"], contrastive=config["training"]["contrastive"])
+    
         with open(config["model_params"]["adj_matr"], 'rb') as f:
             A = np.load(f)
+            
         A_hat = torch.Tensor(get_normalized_adj(A)).to(args.device)
-        encoder = STGCN(num_nodes,num_feat_in,config["dataset"]["min_frames"],config["model_params"]["feat_out"], num_classes=128,edge_weight=config["model_params"]["edge_weight"], contrastive=config["training"]["contrastive"])#config["dataset"]["classes"]
-        encoder = encoder.to(args.device)
-        linear = torch.nn.Sequential(torch.nn.Linear(config["model_params"]["feat_out"]*num_nodes, 512),torch.nn.ReLU(),torch.nn.Linear(512, config["dataset"]["classes"]))
+        #encoder = STGCN(num_nodes,num_feat_in,config["dataset"]["min_frames"],config["model_params"]["feat_out"], num_classes=128,edge_weight=config["model_params"]["edge_weight"], contrastive=config["training"]["contrastive"])#config["dataset"]["classes"]
+        #linear = torch.nn.Sequential(torch.nn.Linear(config["model_params"]["feat_out"]*num_nodes, 512),torch.nn.ReLU(),torch.nn.Linear(512, config["dataset"]["classes"]))
+        #############
+        encoder = Encoder(config_file=args.config, device=args.device)
+        linear = torch.nn.Sequential(torch.nn.Linear(512, 256),torch.nn.ReLU(),torch.nn.Linear(256, config["dataset"]["classes"]))
+        #################
         linear = linear.to(args.device)
+        encoder = encoder.to(args.device)
 
     else:
         if not args.skeleton:
-            # num_nodes, num_features, num_timesteps_input, num_featout
-            model = STGCN(num_nodes,num_feat_in,config["dataset"]["min_frames"],config["model_params"]["feat_out"], num_classes=config["dataset"]["classes"],edge_weight=config["model_params"]["edge_weight"] )
-            model = model.to(args.device)
+            if config["training"]["audio_only"]:
+                model = AudioEncoder()
+                model = model.to(args.device)
+            else:
+                # num_nodes, num_features, num_timesteps_input, num_featout
+                model = STGCN(num_nodes,num_feat_in,config["dataset"]["min_frames"],config["model_params"]["feat_out"], num_classes=config["dataset"]["classes"],edge_weight=config["model_params"]["edge_weight"] )
+                model = model.to(args.device)
         else:
             with open(config["model_params"]["adj_matr"], 'rb') as f:
                 A = np.load(f)
             A_hat = torch.Tensor(get_normalized_adj(A)).to(args.device)
             model = SK_STGCN(2,config["dataset"]["train"]["classes"], A_hat,True)
             model = model.to(args.device)
-
-    
     print(f"------ Networks Initialized")
 
     # optimizer
     print(f"------ Creating the optimizers")
     if config["training"]["contrastive"]:
-        #optimizer = torch.optim.SGD(moco_encoder.parameters(),config["training"]["lr_encoder"], weight_decay=config["training"]["wd"], momentum=config["training"]["momentum"])
-        #optimizer = torch.optim.SGD([{'params': moco_encoder.parameters()},
-        #       {'params': linear.parameters(), 'lr': config["training"]["lr_linear"]}], lr=config["training"]["lr_encoder"], weight_decay=config["training"]["wd"], momentum=config["training"]["momentum"]) 
         optimizer_encoder = torch.optim.SGD(encoder.parameters(),config["training"]["lr_encoder"], weight_decay=config["training"]["wd"], momentum=config["training"]["momentum"])
-        ## riduci lr linear
         optimizer_decoder = torch.optim.SGD(linear.parameters(),config["training"]["lr_linear"], weight_decay=config["training"]["wd"], momentum=config["training"]["momentum"])
-        scheduler = None #LinearWarmupCosineAnnealingLR(optimizer, warmup_epochs = 5, max_epochs = 150)
+        scheduler_encoder = StepLR(optimizer_encoder, step_size=config["training"]["scheduler_step"], gamma=config["training"]["scheduler_gamma"])
+        scheduler_decoder = StepLR(optimizer_decoder, step_size=config["training"]["scheduler_step"], gamma=config["training"]["scheduler_gamma"])
+
     else:
         optimizer = torch.optim.SGD(model.parameters(),config["training"]["lr_encoder"], weight_decay=config["training"]["wd"], momentum=config["training"]["momentum"])
-
+        scheduler = StepLR(optimizer, step_size=config["training"]["scheduler_step"], gamma=config["training"]["scheduler_gamma"])
+    
     if args.ckp is not None:
         checkpoint = torch.load(args.ckp)
         model.load_state_dict(checkpoint['model_state_dict'])
@@ -139,10 +147,10 @@ def main(args):
     print(f"------ Training Started")
     if config["training"]["contrastive"]:
         from train_model_contrastive import train 
-        train(encoder, linear, loader_train, [optimizer_encoder, optimizer_decoder], scheduler, encoder_loss, classifier_loss, wandb, epochs=config["training"]["epochs"], device=args.device, test=True, loader_test=loader_test, log_model=config["training"]["log_model"], output_dir=args.output,  adj=config["model_params"]["adj_matr"], config_file=args.config)
+        train(encoder, linear, loader_train, [optimizer_encoder, optimizer_decoder], [scheduler_encoder, scheduler_decoder], encoder_loss, classifier_loss, wandb, epochs=config["training"]["epochs"], device=args.device, test=True, loader_test=loader_test, log_model=config["training"]["log_model"], output_dir=args.output,  adj=config["model_params"]["adj_matr"], config_file=args.config)
     else:
         from train_model_graph import train
-        train(model,loader_train, optimizer, classifier_loss, wandb, epochs=config["training"]["epochs"], device=args.device, test=True, loader_test=loader_test, log_model=config["training"]["log_model"], output_dir=args.output, adj=config["model_params"]["adj_matr"], config_file=args.config)
+        train(model,loader_train, optimizer, classifier_loss, wandb,scheduler, epochs=config["training"]["epochs"], device=args.device, test=True, loader_test=loader_test, log_model=config["training"]["log_model"], output_dir=args.output, adj=config["model_params"]["adj_matr"], config_file=args.config)
  
 
 if __name__ == '__main__':

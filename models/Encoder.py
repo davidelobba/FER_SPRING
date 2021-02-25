@@ -1,28 +1,37 @@
 import torchvision
 import torch
+from models.STGCN import STGCN
+from models.AudioEncoder import AudioEncoder
+import torch.nn as nn
+import yaml
+import numpy as np
+from models.STGCN import get_normalized_adj
 
-class EncoderResnet(torch.nn.Module):
-    def __init__(self, num_feat=128):
+
+class Encoder(torch.nn.Module):
+    def __init__(self, num_nodes_ld=51,num_nodes_audio=64,num_feat_video=2,num_feat_audio=1,config_file=None, num_classes=128, device="cuda:0"):
         """
-        dim: feature dimension (default: 128)
-        K: queue size;
         """
-        super(EncoderResnet, self).__init__()
-        self.num_feat= num_feat
+        super(Encoder, self).__init__()
 
-        # create the encoders
-        # num_classes is the output fc dimension
-        self.resnet = torchvision.models.resnet18(pretrained=True)
-        self.resnet.conv1 = torch.nn.Conv2d(3, 64, kernel_size=(4, 4), stride=(1, 1), padding=(1, 1), bias=False)
-        self.resnet.maxpool = torch.nn.Identity()
-        self.resnet.fc = torch.nn.Identity()
+        with open(config_file) as f:
+            config = yaml.safe_load(f)
+        
+        with open(config["model_params"]["adj_matr"], 'rb') as f:
+            A = np.load(f)
+        self.A_hat_v = torch.Tensor(get_normalized_adj(A)).to(device)
+        adj_a  = np.ones((num_nodes_audio,num_nodes_audio))- np.identity(num_nodes_audio)
+        self.A_hat_a = torch.Tensor(get_normalized_adj(adj_a)).to(device)
 
-        self.lstm = torch.nn.LSTM(input_size = 512, hidden_size = 512, batch_first=True)
+        self.video_stgcn = STGCN(num_nodes_ld,num_feat_video,config["dataset"]["min_frames"],config["model_params"]["feat_out"], num_classes=num_classes,edge_weight=config["model_params"]["edge_weight"], contrastive=False)
+        #self.audio_stgcn = STGCN(num_nodes_audio,num_feat_audio,config["dataset"]["min_frames"],config["model_params"]["feat_out"], num_classes=num_classes,edge_weight=config["model_params"]["edge_weight"], contrastive=False)
+        self.audio = AudioEncoder(out=num_classes)
+        #model = model.to(args.device)
+        self.fc_mix = nn.Linear(num_classes*2,512)
+        self.fc_out = torch.nn.Sequential(torch.nn.Linear(512, 256),torch.nn.ReLU(),torch.nn.Linear(256, num_classes))
 
-        self.mlp = torch.nn.Sequential(torch.nn.Linear(512, 512),torch.nn.ReLU(),torch.nn.Linear(512, num_feat))
 
-
-    def forward(self, inputs):
+    def forward(self, inputs_video, inputs_audio):
         """
         Input:
             inputs: [batch_size * seq_length, 3, 224, 224]
@@ -30,22 +39,19 @@ class EncoderResnet(torch.nn.Module):
             outputs: [batch_size, 128]
             video_features: [batch_size,2048]
         """
-        seq_length = inputs.shape[1]
-        batch_size = inputs.shape[0] #int(inputs.size(0)/seq_length)
-        
-        # no too sure about this line
-        inputs = inputs.view(inputs.shape[0]*inputs.shape[1],inputs.shape[2],inputs.shape[3],inputs.shape[4])
-        # compute features
-        frame_features = self.resnet(inputs)
-        frame_features = frame_features.view(batch_size, seq_length, *frame_features.shape[1:])
+        vf_q1 = self.video_stgcn(self.A_hat_v, inputs_video)
+        #print(vf_q1.shape)
+        #print(self.A_hat_a.shape)
+        #print(inputs_audio.shape)
 
-        video_features, _ = self.lstm(frame_features)
-        video_features = video_features[:,-1,:]
+        af_q2 = self.audio(inputs_audio)
+        #print(af_q2.shape)
 
-        video_features = torch.nn.functional.normalize(video_features)
+        feat = torch.cat((vf_q1,af_q2),1)
+        #print(feat.shape)
+        feat = self.fc_mix(feat)
+        feat_out = self.fc_out(feat)
+        #print(feat.shape)
+        #print(feat_out.shape)
 
-        outputs = self.mlp(video_features)
-    
-        outputs = torch.nn.functional.normalize(outputs)
-
-        return outputs, video_features
+        return torch.nn.functional.normalize(feat_out), feat

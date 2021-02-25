@@ -26,7 +26,7 @@ def make_dataset(directory, class_to_idx):
     return instances
 
 class RAVDESS_LANDMARK(Dataset):
-    def __init__(self, root, samples=None,min_frames=25,audio=False, test=False, zero_start=False, contrastive=False, mixmatch=False, random_aug=False, drop_kp=False):
+    def __init__(self, root, samples=None,min_frames=25,n_mels = 128,audio=False,audio_only=False,  test=False, zero_start=False, contrastive=False, mixmatch=False, random_aug=False, drop_kp=False):
         super(RAVDESS_LANDMARK, self).__init__()
         self.root = root
         classes, class_to_idx = self._find_classes(self.root)
@@ -46,8 +46,12 @@ class RAVDESS_LANDMARK(Dataset):
         self.random_aug = random_aug
         self.drop_kp = drop_kp
         self.audio = audio
-        #if self.audio:
-        #    self.preprocess_audio()
+        self.audio_only = audio_only
+        self.n_mels = n_mels 
+        self.audio_separate = True # only for testing 
+        self.preprocess_landmark()
+        if self.audio:
+            self.preprocess_audio()
 
     def __len__(self):
             return len(self.samples)
@@ -71,21 +75,29 @@ class RAVDESS_LANDMARK(Dataset):
         class_to_idx = {cls_name: i for i, cls_name in enumerate(classes)}
         return classes, class_to_idx
     
-    def preprocess_audio(self):
+    def preprocess_landmark(self):
         new_samples = []
+        print("preprocessing landmarks")
         for idx in tqdm(range(len(self.samples))):
-            path_ld = self.samples[idx][0]
+            path_ld = self.samples[idx][0]            
             data = pd.read_csv(path_ld)
             kx = data.iloc[:,297:365].to_numpy()
-            path_audio = self.samples[idx][2]
-            data, sampling_rate = librosa.load(path_audio)
-            #mel_spect = np.array(librosa.feature.melspectrogram(y=data, sr=sampling_rate, n_mels=kx.shape[0])).mean(axis=1)
-            
-            hop_length = int(len(data)/kx.shape[0])
-            mel_spect = np.array(librosa.feature.melspectrogram(y=data, sr=sampling_rate, hop_length=hop_length, n_mels=128)) #.mean(0)
-            mel_spect = mel_spect[:kx.shape[0]]
-            new_samples.append( (self.samples[idx][0],self.samples[idx][1],self.samples[idx][2],  mel_spect) ) 
+            ky = data.iloc[:,365:433].to_numpy()
+            kx = (kx - np.min(kx))/np.ptp(kx)
+            ky = (ky - np.min(ky))/np.ptp(ky)   
+            new_samples.append(([kx,ky],self.samples[idx][1],self.samples[idx][2])) 
+        
+        self.samples = new_samples
 
+
+    def preprocess_audio(self):
+        new_samples = []
+        print("preprocessing audio")
+        for idx in tqdm(range(len(self.samples))):
+            path_audio = self.samples[idx][2]
+            with open(path_audio, 'rb') as f:
+                mel_spect = np.load(f)
+            new_samples.append((self.samples[idx][0],self.samples[idx][1],torch.Tensor(mel_spect))) 
         self.samples = new_samples
     
     def get_class_sample_count(self):
@@ -111,29 +123,24 @@ class RAVDESS_LANDMARK(Dataset):
         return out_rot
 
     def __getitem__(self, index: int):
-        path, target  = self.samples[index][0], self.samples[index][1]
-        data = pd.read_csv(path)
+        target = self.samples[index][1]
+        kx,ky = self.samples[index][0][0], self.samples[index][0][1] 
 
         noise = torch.normal(0, 0.003, size=(51, 2))
         
-        kx = data.iloc[:,297:365].to_numpy()
-        ky = data.iloc[:,365:433].to_numpy()
-        
-        kx = (kx - np.min(kx))/np.ptp(kx)
-        ky = (ky - np.min(ky))/np.ptp(ky)    
-        
         if self.audio:
-            path_audio = self.samples[index][2]
-            data, sampling_rate = librosa.load(path_audio)
-            # mel_spect = self.samples[index][3]
-            # hop_length = int(len(data)/kx.shape[0])
-            # mel_spect = np.array(librosa.feature.melspectrogram(y=data, sr=sampling_rate, hop_length=hop_length, n_mels=128)).mean(0)
-            mel_spect = mel_spect[:kx.shape[0]]
-            mel_spect = np.array([np.repeat(mv,68) for mv in mel_spect])
-            ld = np.array([kx,ky,mel_spect]).T
+            mel_spect = self.samples[index][2]
+            if self.audio_only:
+                ld = np.array([kx,ky]).T
+            elif not self.audio_separate:
+                mel_spect = mel_spect.mean(1).numpy()
+                mel_spect = np.array([np.repeat(mv,68) for mv in mel_spect])
+                ld = np.array([kx,ky,mel_spect]).T
+            else:
+                ld = np.array([kx,ky]).T
         else:
             ld = np.array([kx,ky]).T
-
+        
         ld = torch.Tensor(np.rollaxis(ld, 1, 0))
         num_frames = ld.shape[0] 
         
@@ -141,6 +148,8 @@ class RAVDESS_LANDMARK(Dataset):
             pad = self.min_frames - num_frames
             #ld = torch.cat((ld,ld[ld.shape[0]-1].repeat(pad,1,1)), 0)
             ld = torch.cat((ld,ld[:pad]), 0)
+            if self.audio and self.audio_separate:
+                mel_spect =torch.cat((mel_spect,mel_spect[:pad]), 0)
                 
         
         if num_frames > self.min_frames:
@@ -160,7 +169,13 @@ class RAVDESS_LANDMARK(Dataset):
                 start_frame_2 =  randint(0, num_frames-self.min_frames)
             else:
                 start_frame_2 = 0
-            return target, ld[start_frame: start_frame+self.min_frames,17:,: ], ld[start_frame_2: start_frame_2+self.min_frames,17:,: ]
+            if self.audio_only:
+                return target, mel_spect[start_frame: start_frame+self.min_frames,:], mel_spect[start_frame_2: start_frame_2+self.min_frames,:] #[num_f, n_mel]
+            elif self.audio_separate:
+                return target, ld[start_frame: start_frame+self.min_frames,17:,: ], ld[start_frame_2: start_frame_2+self.min_frames,17:,: ], mel_spect[start_frame: start_frame+self.min_frames,:], mel_spect[start_frame_2: start_frame_2+self.min_frames,:]
+            else:
+                return target, ld[start_frame: start_frame+self.min_frames,17:,: ], ld[start_frame_2: start_frame_2+self.min_frames,17:,: ]
+                
         else:
             if self.random_aug and not self.test:
                 ld =  ld[start_frame: start_frame+self.min_frames,17:,: ]
@@ -179,5 +194,7 @@ class RAVDESS_LANDMARK(Dataset):
                         out[idx, kps[idx],:] = 0 
                 out = self.rotate(out, degrees=randint(-10,10))
                 return target, out  
+            if self.audio_only:
+                return target, mel_spect[start_frame: start_frame+self.min_frames,:]
 
             return target, ld[start_frame: start_frame+self.min_frames,17:,: ]

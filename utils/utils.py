@@ -16,7 +16,7 @@ def make_dataset(directory_ld, class_to_idx, directory_audio= None):
             for fname in sorted(fnames):
                 path_ld = os.path.join(root, fname)
                 if directory_audio is not None:
-                    path_audio = os.path.join(directory_audio,root.split("/")[-1], "03"+fname[2:-3]+"wav")
+                    path_audio = os.path.join(directory_audio,root.split("/")[-1], "03"+fname[2:-3]+"pkl")
                     item = path_ld,class_index, path_audio
                 else:
                     item = path_ld,class_index

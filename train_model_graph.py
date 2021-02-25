@@ -9,7 +9,7 @@ import yaml
 from shutil import copyfile
 
 
-def train(model, loader_train, optimizer, classifier_loss, wandb,epochs=200,device="cuda:2", test=False, loader_test=None, log_model=20, output_dir=None, adj=None, config_file=None, sklt=False):
+def train(model, loader_train, optimizer, classifier_loss, wandb,scheduler,epochs=200,device="cuda:2", test=False, loader_test=None, log_model=20, output_dir=None, adj=None, config_file=None, sklt=False):
     
     e = 0
     log_dir =  strftime("%d-%m-%y %H:%M:%S", gmtime())
@@ -28,8 +28,14 @@ def train(model, loader_train, optimizer, classifier_loss, wandb,epochs=200,devi
 
     with open(adj, 'rb') as f:
         A = np.load(f)
-
     A_hat = torch.Tensor(get_normalized_adj(A)).to(device)
+
+    if conf["training"]["audio_only"]:
+        num_nodes = conf["dataset"]["n_mels"]
+        num_feat_in = 1
+        adj  = np.ones((num_nodes,num_nodes))- np.identity(num_nodes)
+        A_hat = torch.Tensor(get_normalized_adj(adj)).to(device)
+
     for e in range(epochs):
 
         samples = 0.
@@ -48,14 +54,12 @@ def train(model, loader_train, optimizer, classifier_loss, wandb,epochs=200,devi
 
         for batch_idx, (targets, ld) in enumerate(tqdm(loader_train)):
             targets, ld = targets.to(device), ld.to(device)
-
-            # Forward pass
-            if sklt:
-                logits = model(ld.permute(0,3,1,2).unsqueeze(4))
-                #logits = model(ld.unsqueeze(.unsqueeze(4)))
+            
+            if conf["training"]["audio_only"]:
+                logits = model(ld)
             else:
                 logits = model(A_hat,ld, augmented=augmented)
-            
+
             loss = classifier_loss(logits, targets)            
             # compute loss 
             optimizer.zero_grad()
@@ -90,7 +94,7 @@ def train(model, loader_train, optimizer, classifier_loss, wandb,epochs=200,devi
 
         # test performance over the test set    
         if test:
-            test_loss, test_accuracy, label_pred_correct, label_pred_count, label_tot_count = evaluate_model_graph(model, loader_test, classifier_loss, device=device, adj=A_hat,augmented=augmented)
+            test_loss, test_accuracy, label_pred_correct, label_pred_count, label_tot_count = evaluate_model_graph(model, loader_test, classifier_loss, device=device, adj=A_hat,augmented=augmented, audio_only=conf["training"]["audio_only"])
             print('\t Test loss {:.5f},  Test accuracy {:.2f}'.format(test_loss, test_accuracy))
             if wandb is not None:
                 wandb.log({"Test_Accuracy": test_accuracy ,  "Test_Total Loss": test_loss})
@@ -106,6 +110,8 @@ def train(model, loader_train, optimizer, classifier_loss, wandb,epochs=200,devi
             correct_train = np.array(train_label_pred)/np.array(train_label_count)
             for i in range(len(label_pred_count)):
                 wandb.log({"Train_label_percentage_"+str(label[i]): correct_train[i] }) 
+        
+        scheduler.step()
 
     
     ## save last model version
