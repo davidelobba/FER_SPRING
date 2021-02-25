@@ -12,6 +12,7 @@ from models.STGCN import STGCN, get_normalized_adj
 from models.SKELETON_STGCN import SK_STGCN
 from models.Encoder import Encoder
 from models.AudioEncoder import AudioEncoder
+from models.TCN import TCN
 
 from utils.SupCon import SupConLoss
 from utils.LinearWarmupScheduler import LinearWarmupCosineAnnealingLR
@@ -97,7 +98,7 @@ def main(args):
     else:
         if not args.skeleton:
             if config["training"]["audio_only"]:
-                model = AudioEncoder()
+                model = TCN(in_chan=128, n_blocks=5, n_repeats=2, out_chan=8) #AudioEncoder()
                 model = model.to(args.device)
             else:
                 # num_nodes, num_features, num_timesteps_input, num_featout
@@ -116,12 +117,12 @@ def main(args):
     if config["training"]["contrastive"]:
         optimizer_encoder = torch.optim.SGD(encoder.parameters(),config["training"]["lr_encoder"], weight_decay=config["training"]["wd"], momentum=config["training"]["momentum"])
         optimizer_decoder = torch.optim.SGD(linear.parameters(),config["training"]["lr_linear"], weight_decay=config["training"]["wd"], momentum=config["training"]["momentum"])
-        scheduler_encoder = StepLR(optimizer_encoder, step_size=config["training"]["scheduler_step"], gamma=config["training"]["scheduler_gamma"])
-        scheduler_decoder = StepLR(optimizer_decoder, step_size=config["training"]["scheduler_step"], gamma=config["training"]["scheduler_gamma"])
+        scheduler_encoder = torch.optim.lr_scheduler.StepLR(optimizer_encoder, step_size=config["training"]["scheduler_step"], gamma=config["training"]["scheduler_gamma"])
+        scheduler_decoder = torch.optim.lr_scheduler.StepLR(optimizer_decoder, step_size=config["training"]["scheduler_step"], gamma=config["training"]["scheduler_gamma"])
 
     else:
         optimizer = torch.optim.SGD(model.parameters(),config["training"]["lr_encoder"], weight_decay=config["training"]["wd"], momentum=config["training"]["momentum"])
-        scheduler = StepLR(optimizer, step_size=config["training"]["scheduler_step"], gamma=config["training"]["scheduler_gamma"])
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=config["training"]["scheduler_step"], gamma=config["training"]["scheduler_gamma"])
     
     if args.ckp is not None:
         checkpoint = torch.load(args.ckp)

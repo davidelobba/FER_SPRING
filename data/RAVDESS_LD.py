@@ -49,9 +49,9 @@ class RAVDESS_LANDMARK(Dataset):
         self.audio_only = audio_only
         self.n_mels = n_mels 
         self.audio_separate = True # only for testing 
-        self.preprocess_landmark()
+        self.preprocess_landmark(audio=audio_only)
         if self.audio:
-            self.preprocess_audio()
+            self.preprocess_audio(audio=audio_only)
 
     def __len__(self):
             return len(self.samples)
@@ -75,29 +75,38 @@ class RAVDESS_LANDMARK(Dataset):
         class_to_idx = {cls_name: i for i, cls_name in enumerate(classes)}
         return classes, class_to_idx
     
-    def preprocess_landmark(self):
+    def preprocess_landmark(self,audio=False):
         new_samples = []
         print("preprocessing landmarks")
         for idx in tqdm(range(len(self.samples))):
             path_ld = self.samples[idx][0]            
-            data = pd.read_csv(path_ld)
-            kx = data.iloc[:,297:365].to_numpy()
-            ky = data.iloc[:,365:433].to_numpy()
-            kx = (kx - np.min(kx))/np.ptp(kx)
-            ky = (ky - np.min(ky))/np.ptp(ky)   
+            if audio:
+                kx = np.zeros((68,2))
+                ky = np.zeros((68,2))
+            else:        
+                data = pd.read_csv(path_ld)
+                kx = data.iloc[:,297:365].to_numpy()
+                ky = data.iloc[:,365:433].to_numpy()
+                kx = (kx - np.min(kx))/np.ptp(kx)
+                ky = (ky - np.min(ky))/np.ptp(ky)   
             new_samples.append(([kx,ky],self.samples[idx][1],self.samples[idx][2])) 
         
         self.samples = new_samples
 
 
-    def preprocess_audio(self):
+    def preprocess_audio(self,audio=False):
         new_samples = []
         print("preprocessing audio")
         for idx in tqdm(range(len(self.samples))):
             path_audio = self.samples[idx][2]
             with open(path_audio, 'rb') as f:
                 mel_spect = np.load(f)
-            new_samples.append((self.samples[idx][0],self.samples[idx][1],torch.Tensor(mel_spect))) 
+                len_seq = mel_spect.shape[0]
+                mel_spect = librosa.power_to_db(mel_spect, ref=np.max)
+            if audio:
+                new_samples.append(([np.zeros((len_seq,68,2)),np.zeros((len_seq,68,2))],self.samples[idx][1],torch.Tensor(mel_spect))) 
+            else:
+                new_samples.append((self.samples[idx][0],self.samples[idx][1],torch.Tensor(mel_spect))) 
         self.samples = new_samples
     
     def get_class_sample_count(self):

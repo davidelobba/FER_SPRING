@@ -1,7 +1,7 @@
 import torchvision
 import torch
 from models.STGCN import STGCN
-from models.AudioEncoder import AudioEncoder
+from models.TCN import TCN
 import torch.nn as nn
 import yaml
 import numpy as np
@@ -25,7 +25,7 @@ class Encoder(torch.nn.Module):
 
         self.video_stgcn = STGCN(num_nodes_ld,num_feat_video,config["dataset"]["min_frames"],config["model_params"]["feat_out"], num_classes=num_classes,edge_weight=config["model_params"]["edge_weight"], contrastive=False)
         #self.audio_stgcn = STGCN(num_nodes_audio,num_feat_audio,config["dataset"]["min_frames"],config["model_params"]["feat_out"], num_classes=num_classes,edge_weight=config["model_params"]["edge_weight"], contrastive=False)
-        self.audio = AudioEncoder(out=num_classes)
+        self.audio = TCN(in_chan=128, n_blocks=5, n_repeats=2, out_chan=num_classes) #AudioEncoder(out=num_classes)
         #model = model.to(args.device)
         self.fc_mix = nn.Linear(num_classes*2,512)
         self.fc_out = torch.nn.Sequential(torch.nn.Linear(512, 256),torch.nn.ReLU(),torch.nn.Linear(256, num_classes))

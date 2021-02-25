@@ -26,10 +26,10 @@ training:
     classes : 8
     num_workers : 4
     log_model: 20
-    contrastive: False
+    contrastive: True
     unsupervised: False
     random_aug: False
     augmented: False
     drop_kp: False
     focal: False 
-    audio_only : True
+    audio_only : False
