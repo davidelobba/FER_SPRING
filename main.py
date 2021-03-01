@@ -54,8 +54,8 @@ def main(args):
         audio =False 
         if config["dataset"]["path_audio"] is not None:
             audio =True 
-        dataset_train = RAVDESS_LANDMARK(config["dataset"]["path"], samples=sample_train, min_frames=config["dataset"]["min_frames"],n_mels=config["dataset"]["n_mels"],audio=audio, audio_only=config["training"]["audio_only"],zero_start=config["dataset"]["zero_start"], contrastive=config["training"]["contrastive"],  mixmatch=config["training"]["augmented"], random_aug=config["training"]["random_aug"], drop_kp=config["training"]["drop_kp"])
-        dataset_test = RAVDESS_LANDMARK(config["dataset"]["path"], samples=sample_test, min_frames=config["dataset"]["min_frames"],n_mels=config["dataset"]["n_mels"],test=True, audio=audio,audio_only=config["training"]["audio_only"],zero_start=config["dataset"]["zero_start"],  contrastive=config["training"]["contrastive"],  mixmatch=config["training"]["augmented"], random_aug=config["training"]["random_aug"])        
+        dataset_train = RAVDESS_LANDMARK(config["dataset"]["path"], samples=sample_train, min_frames=config["dataset"]["min_frames"],n_mels=config["dataset"]["n_mels"],audio=audio, audio_only=config["training"]["audio_only"],audio_separate=config["training"]["audio_separate"], zero_start=config["dataset"]["zero_start"], contrastive=config["training"]["contrastive"],  mixmatch=config["training"]["augmented"], random_aug=config["training"]["random_aug"], drop_kp=config["training"]["drop_kp"])
+        dataset_test = RAVDESS_LANDMARK(config["dataset"]["path"], samples=sample_test, min_frames=config["dataset"]["min_frames"],n_mels=config["dataset"]["n_mels"],test=True, audio=audio,audio_only=config["training"]["audio_only"],audio_separate=config["training"]["audio_separate"], zero_start=config["dataset"]["zero_start"],  contrastive=config["training"]["contrastive"],  mixmatch=config["training"]["augmented"], random_aug=config["training"]["random_aug"])        
         #dataset_train = RAVDESS_LANDMARK(config["dataset"]["train"]["path"], min_frames=config["dataset"]["train"]["min_frames"], zero_start=config["dataset"]["train"]["zero_start"], contrastive=config["training"]["contrastive"],  mixmatch=config["training"]["augmented"], random_aug=config["training"]["random_aug"], drop_kp=config["training"]["drop_kp"])
         #dataset_test = RAVDESS_LANDMARK(config["dataset"]["test"]["path"], min_frames=config["dataset"]["test"]["min_frames"],  test=True, zero_start=config["dataset"]["train"]["zero_start"],  contrastive=config["training"]["contrastive"],  mixmatch=config["training"]["augmented"], random_aug=config["training"]["random_aug"])
     
@@ -86,11 +86,16 @@ def main(args):
             A = np.load(f)
             
         A_hat = torch.Tensor(get_normalized_adj(A)).to(args.device)
-        #encoder = STGCN(num_nodes,num_feat_in,config["dataset"]["min_frames"],config["model_params"]["feat_out"], num_classes=128,edge_weight=config["model_params"]["edge_weight"], contrastive=config["training"]["contrastive"])#config["dataset"]["classes"]
-        #linear = torch.nn.Sequential(torch.nn.Linear(config["model_params"]["feat_out"]*num_nodes, 512),torch.nn.ReLU(),torch.nn.Linear(512, config["dataset"]["classes"]))
+        if config["training"]["audio_separate"]:
+            encoder = Encoder(config_file=args.config, device=args.device)
+            linear = torch.nn.Sequential(torch.nn.Linear(512, 256),torch.nn.ReLU(),torch.nn.Linear(256, config["dataset"]["classes"]))
+        else:
+            encoder = STGCN(num_nodes,num_feat_in,config["dataset"]["min_frames"],config["model_params"]["feat_out"], num_classes=128,edge_weight=config["model_params"]["edge_weight"], contrastive=config["training"]["contrastive"])#config["dataset"]["classes"]
+            linear = torch.nn.Sequential(torch.nn.Linear(config["model_params"]["feat_out"]*num_nodes, 512),torch.nn.ReLU(),torch.nn.Linear(512, config["dataset"]["classes"]))
         #############
-        encoder = Encoder(config_file=args.config, device=args.device)
-        linear = torch.nn.Sequential(torch.nn.Linear(512, 256),torch.nn.ReLU(),torch.nn.Linear(256, config["dataset"]["classes"]))
+        #encoder = Encoder(config_file=args.config, device=args.device)
+        #linear = torch.nn.Sequential(torch.nn.Linear(512, 256),torch.nn.ReLU(),torch.nn.Linear(256, config["dataset"]["classes"]))
+        #linear = torch.nn.Sequential(torch.nn.Linear(256, 128),torch.nn.ReLU(),torch.nn.Linear(128, config["dataset"]["classes"]))
         #################
         linear = linear.to(args.device)
         encoder = encoder.to(args.device)

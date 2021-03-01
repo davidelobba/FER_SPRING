@@ -26,7 +26,7 @@ def make_dataset(directory, class_to_idx):
     return instances
 
 class RAVDESS_LANDMARK(Dataset):
-    def __init__(self, root, samples=None,min_frames=25,n_mels = 128,audio=False,audio_only=False,  test=False, zero_start=False, contrastive=False, mixmatch=False, random_aug=False, drop_kp=False):
+    def __init__(self, root, samples=None,min_frames=25,n_mels = 128,audio=False,audio_only=False,audio_separate=False,   test=False, zero_start=False, contrastive=False, mixmatch=False, random_aug=False, drop_kp=False):
         super(RAVDESS_LANDMARK, self).__init__()
         self.root = root
         classes, class_to_idx = self._find_classes(self.root)
@@ -48,10 +48,10 @@ class RAVDESS_LANDMARK(Dataset):
         self.audio = audio
         self.audio_only = audio_only
         self.n_mels = n_mels 
-        self.audio_separate = True # only for testing 
-        self.preprocess_landmark(audio=audio_only)
+        self.audio_separate = audio_separate 
+        self.preprocess_landmark(audio=True)
         if self.audio:
-            self.preprocess_audio(audio=audio_only)
+            self.preprocess_audio(audio=True)
 
     def __len__(self):
             return len(self.samples)
@@ -81,8 +81,8 @@ class RAVDESS_LANDMARK(Dataset):
         for idx in tqdm(range(len(self.samples))):
             path_ld = self.samples[idx][0]            
             if audio:
-                kx = np.zeros((68,2))
-                ky = np.zeros((68,2))
+                kx = np.zeros((68))
+                ky = np.zeros((68))
             else:        
                 data = pd.read_csv(path_ld)
                 kx = data.iloc[:,297:365].to_numpy()
@@ -102,9 +102,9 @@ class RAVDESS_LANDMARK(Dataset):
             with open(path_audio, 'rb') as f:
                 mel_spect = np.load(f)
                 len_seq = mel_spect.shape[0]
-                mel_spect = librosa.power_to_db(mel_spect, ref=np.max)
+                #mel_spect = librosa.power_to_db(mel_spect, ref=np.max)
             if audio:
-                new_samples.append(([np.zeros((len_seq,68,2)),np.zeros((len_seq,68,2))],self.samples[idx][1],torch.Tensor(mel_spect))) 
+                new_samples.append(([np.zeros((len_seq,68)),np.zeros((len_seq,68))],self.samples[idx][1],torch.Tensor(mel_spect))) 
             else:
                 new_samples.append((self.samples[idx][0],self.samples[idx][1],torch.Tensor(mel_spect))) 
         self.samples = new_samples
@@ -151,8 +151,9 @@ class RAVDESS_LANDMARK(Dataset):
             ld = np.array([kx,ky]).T
         
         ld = torch.Tensor(np.rollaxis(ld, 1, 0))
-        num_frames = ld.shape[0] 
-        
+        num_frames = ld.shape[0]
+        #print(f" before {mel_spect.shape} n_framse {num_frames}")
+
         if num_frames < self.min_frames:
             pad = self.min_frames - num_frames
             #ld = torch.cat((ld,ld[ld.shape[0]-1].repeat(pad,1,1)), 0)
@@ -160,7 +161,9 @@ class RAVDESS_LANDMARK(Dataset):
             if self.audio and self.audio_separate:
                 mel_spect =torch.cat((mel_spect,mel_spect[:pad]), 0)
                 
-        
+        #print(f"ld.shape {ld.shape}") 
+        #print(mel_spect.shape)
+
         if num_frames > self.min_frames:
             start_frame =  randint(0, num_frames-self.min_frames)
         else:

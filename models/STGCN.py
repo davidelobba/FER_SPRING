@@ -92,9 +92,15 @@ class STGCNBlock(nn.Module):
         num_timesteps_out, num_features=out_channels).
         """
         t = self.temporal1(X)
+        print(f" {A_hat.shape} {t.shape}")
         lfs = torch.einsum("ij,jklm->kilm", [A_hat, t.permute(1, 0, 2, 3)])
+        print(f" {lfs.shape}")
+        print(f"{self.Theta1.shape}")
+
         # t2 = F.relu(torch.einsum("ijkl,lp->ijkp", [lfs, self.Theta1]))
         t2 = F.relu(torch.matmul(lfs, self.Theta1))
+        print(f"{t2.shape}")
+
         t3 = self.temporal2(t2)
         return self.batch_norm(t3)
         # return t3
