@@ -24,7 +24,7 @@ training:
     momentum : 0.9
     epochs : 2000
     classes : 8
-    num_workers : 4
+    num_workers : 8
     log_model: 20
     contrastive: True
     unsupervised: False
@@ -33,4 +33,4 @@ training:
     drop_kp: False
     focal: False 
     audio_only : False
-    audio_separate : False
+    audio_separate : True

@@ -7,6 +7,7 @@ from shutil import copyfile
 import numpy as np
 from models.STGCN import get_normalized_adj
 import yaml
+from utils.ModelMonitor import ModelMonitoring
 
 
 def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss, classifier_loss, wandb,epochs=200,device="cuda:2", test=False, loader_test=None, log_model=20, output_dir=None, adj=None, config_file=None, sklt=False):
@@ -23,6 +24,8 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
 
     moco_encoder.train()
     linear.train()
+
+    inspector = ModelMonitoring(patience=20)
 
     with open(adj, 'rb') as f:
             A = np.load(f)
@@ -115,7 +118,7 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
         final_contr_loss = cumulative_contr_loss/batch_count
         final_ce_loss = cumulative_ce_loss/batch_count
         accuracy = cumulative_accuracy/samples*100
-
+        
         if e % log_model == 0:  
             filename = os.path.join(output_dir,"encoder","encoder_epoch_"+str(e)+".pth")
             torch.save({
@@ -147,6 +150,8 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
                 label = ["neutral", "calm", "happy","sad", "angry", "fearful", "disgust", "surprised"]
                 for i in range(len(label_pred_count)):
                     wandb.log({"Test_label_percentage_"+str(label[i]): correct[i] })
+                
+            inspector(test_accuracy)
 
 
         print('\t Training loss {:.5f}, Train_contr_loss {:.5f}, Train_ce_loss {:.5f}, Training accuracy {:.2f}'.format(final_loss, final_contr_loss, final_ce_loss, accuracy))
@@ -155,7 +160,25 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
                         "Cross Entropy Loss": final_ce_loss,  "Total Loss": final_loss})
             correct_train = np.array(train_label_pred)/np.array(train_label_count)
             for i in range(len(label_pred_count)):
-                wandb.log({"Train_label_percentage_"+str(label[i]): correct_train[i] }) 
+                wandb.log({"Train_label_percentage_"+str(label[i]): correct_train[i] })
+
+        if inspector.stopped:
+            print(f"BEST SCORE {inspector.best_score}")
+            filename = os.path.join(output_dir,"encoder","encoder_epoch_"+str(e)+".pth")
+            torch.save({
+                'epoch': e,
+                'model_state_dict': moco_encoder.state_dict(),
+                'optimizer_state_dict': optimizer_encoder.state_dict(),
+                'loss': final_loss,
+                }, filename)
+            filename = os.path.join(output_dir,"linear","linear_epoch_"+str(e)+".pth")
+            torch.save({
+                'epoch': e,
+                'model_state_dict': linear.state_dict(),
+                'optimizer_state_dict': optimizer_decoder.state_dict(),
+                'loss': final_loss,
+                }, filename)
+            break 
 
         #
 

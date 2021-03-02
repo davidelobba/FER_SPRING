@@ -49,9 +49,9 @@ class RAVDESS_LANDMARK(Dataset):
         self.audio_only = audio_only
         self.n_mels = n_mels 
         self.audio_separate = audio_separate 
-        self.preprocess_landmark(audio=True)
+        self.preprocess_landmark(audio=audio_only)
         if self.audio:
-            self.preprocess_audio(audio=True)
+            self.preprocess_audio(audio=audio_only)
 
     def __len__(self):
             return len(self.samples)
@@ -102,7 +102,7 @@ class RAVDESS_LANDMARK(Dataset):
             with open(path_audio, 'rb') as f:
                 mel_spect = np.load(f)
                 len_seq = mel_spect.shape[0]
-                #mel_spect = librosa.power_to_db(mel_spect, ref=np.max)
+                mel_spect = librosa.power_to_db(mel_spect, ref=np.max)
             if audio:
                 new_samples.append(([np.zeros((len_seq,68)),np.zeros((len_seq,68))],self.samples[idx][1],torch.Tensor(mel_spect))) 
             else:

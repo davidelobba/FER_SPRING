@@ -50,6 +50,33 @@ class TimeBlock(nn.Module):
         out = out.permute(0, 2, 3, 1)
         return out
 
+class AttentionBlock(nn.Module):
+        def __init__(self, in_channels, att_dim):
+            super(AttentionBlock, self).__init__()
+            #self.lstm =  nn.LSTM(in_channels,out_channels)
+            out_channels = 4
+            self.temporal = TimeBlock(in_channels, out_channels)
+            print(out_channels*2*att_dim)
+            self.fc = nn.Linear((att_dim*out_channels)*2, 1)
+            self.indexes = None 
+
+        def forward(self, X, A):
+            if self.indexes is None:
+                self.indexes = torch.nonzero(A)
+            
+            t = self.temporal(X)
+            b_size = t.shape[0]
+            
+            att_mat = torch.zeros(b_size,A.shape[0], A.shape[1]).to(A.device) # matrix [batch, num_nodes, num_nodes]
+            
+            for idx in self.indexes:
+                i,j = idx[0], idx[1]
+                concat =  torch.cat((t[:,i].flatten(start_dim=1),t[:,j].flatten(start_dim=1)), 1)
+                att_mat[:,i,j] = F.leaky_relu(self.fc(concat).squeeze(1))
+
+            attended_matrix = att_mat * A 
+
+            return attended_matrix
 
 class STGCNBlock(nn.Module):
     """
@@ -59,7 +86,7 @@ class STGCNBlock(nn.Module):
     """
 
     def __init__(self, in_channels, spatial_channels, out_channels,
-                 num_nodes):
+                 num_nodes, att_dim):
         """
         :param in_channels: Number of input features at each node in each time
         step.
@@ -70,6 +97,8 @@ class STGCNBlock(nn.Module):
         :param num_nodes: Number of nodes in the graph.
         """
         super(STGCNBlock, self).__init__()
+        #print(f"in_channels {in_channels} spatial_channels {spatial_channels} out_channels {out_channels} num_nodes {num_nodes}")
+        self.attention_block = AttentionBlock(in_channels,att_dim)
         self.temporal1 = TimeBlock(in_channels=in_channels,
                                    out_channels=out_channels)
         self.Theta1 = nn.Parameter(torch.FloatTensor(out_channels,
@@ -91,15 +120,22 @@ class STGCNBlock(nn.Module):
         :return: Output data of shape (batch_size, num_nodes,
         num_timesteps_out, num_features=out_channels).
         """
+        #print(f"X {X.shape} ")
         t = self.temporal1(X)
-        print(f" {A_hat.shape} {t.shape}")
-        lfs = torch.einsum("ij,jklm->kilm", [A_hat, t.permute(1, 0, 2, 3)])
-        print(f" {lfs.shape}")
-        print(f"{self.Theta1.shape}")
+        #print(f"{A_hat.shape} {t.shape}")
+
+        #[batch, num_nodes, num_nodes]   
+        att_m = self.attention_block(X ,A_hat)
+        #print(f"att_m.shape {att_m.shape} t.permute(1, 0, 2, 3) {t.permute(1, 0, 2, 3).shape}")
+        #lfs = torch.einsum("ij,jklm->kilm", [A_hat, t.permute(1, 0, 2, 3)])
+    
+        lfs = torch.einsum("ijh,jklm->kjlm", [att_m, t.permute(1, 0, 2, 3)])
+        #print(f" {lfs.shape}")
+        #print(f"{self.Theta1.shape}")
 
         # t2 = F.relu(torch.einsum("ijkl,lp->ijkp", [lfs, self.Theta1]))
         t2 = F.relu(torch.matmul(lfs, self.Theta1))
-        print(f"{t2.shape}")
+        #print(f"{t2.shape}")
 
         t3 = self.temporal2(t2)
         return self.batch_norm(t3)
@@ -126,9 +162,9 @@ class STGCN(nn.Module):
         """
         super(STGCN, self).__init__()
         self.block1 = STGCNBlock(in_channels=num_features, out_channels=64,
-                                 spatial_channels=16, num_nodes=num_nodes)
+                                 spatial_channels=16, num_nodes=num_nodes, att_dim= 88)
         self.block2 = STGCNBlock(in_channels=64, out_channels=64,
-                                 spatial_channels=16, num_nodes=num_nodes)
+                                 spatial_channels=16, num_nodes=num_nodes, att_dim= 84)
         self.last_temporal = TimeBlock(in_channels=64, out_channels=64)
         self.fully = nn.Linear((num_timesteps_input - 2 * 5) * 64,
                                num_timesteps_output)

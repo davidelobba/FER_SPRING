@@ -81,7 +81,6 @@ def main(args):
         num_feat_in = 1
     
     if config["training"]["contrastive"]:
-    
         with open(config["model_params"]["adj_matr"], 'rb') as f:
             A = np.load(f)
             

@@ -135,6 +135,8 @@ class TCN(nn.Module):
         self.bottleneck = nn.Sequential(layer_norm, bottleneck_conv)
         # Succession of Conv1DBlock with exponentially increasing dilation.
         self.TCN = nn.ModuleList()
+        self.dropout = nn.Dropout(p=0.1) 
+
         for r in range(n_repeats):       #ripetizioni 2
             for x in range(n_blocks):     #5 layers convoluzionali
                 padding = (kernel_size - 1) * 2 ** x // 2
@@ -151,9 +153,9 @@ class TCN(nn.Module):
     # Get activation function.
     def forward(self, mixture_w):
         mixture_w = mixture_w.permute(0,2,1)
-        output = self.bottleneck(mixture_w)
+        output = self.dropout(self.bottleneck(mixture_w))
         for i in range(len(self.TCN)):
-            residual = self.TCN[i](output)
+            residual = self.dropout(self.TCN[i](output))
             output = output + residual
 
         ###provare max pool2D su ouput seguito de reshape .view(-1,1)

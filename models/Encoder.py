@@ -27,6 +27,8 @@ class Encoder(torch.nn.Module):
         #self.audio_stgcn = STGCN(num_nodes_audio,num_feat_audio,config["dataset"]["min_frames"],config["model_params"]["feat_out"], num_classes=num_classes,edge_weight=config["model_params"]["edge_weight"], contrastive=False)
         self.audio = TCN(in_chan=128, n_blocks=5, n_repeats=2, out_chan=num_classes) #AudioEncoder(out=num_classes)
         #model = model.to(args.device)
+        self.dropout = nn.Dropout(p=0.1) 
+        ####
         self.fc_mix_1 = nn.Linear(num_classes*2,256)
         self.fc_mix_2 = nn.Linear(256+num_classes,512)
         
@@ -50,9 +52,9 @@ class Encoder(torch.nn.Module):
 
         feat = torch.cat((vf_q1,af_q2),1)
         #print(feat.shape)
-        feat = self.fc_mix_1(feat)
+        feat = self.dropout(self.fc_mix_1(feat))
         feat = torch.cat((feat,vf_q1),1)
-        feat = self.fc_mix_2(feat)
+        feat = self.dropout(self.fc_mix_2(feat))
         feat_tm = torch.cat((feat,vf_q1),1)
 
         feat_out = self.fc_out(feat_tm)

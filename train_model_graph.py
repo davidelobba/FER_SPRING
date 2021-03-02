@@ -8,6 +8,9 @@ import numpy as np
 import yaml
 from shutil import copyfile
 
+from utils.ModelMonitor import ModelMonitoring
+
+
 
 def train(model, loader_train, optimizer, classifier_loss, wandb,scheduler,epochs=200,device="cuda:2", test=False, loader_test=None, log_model=20, output_dir=None, adj=None, config_file=None, sklt=False):
     
@@ -29,6 +32,9 @@ def train(model, loader_train, optimizer, classifier_loss, wandb,scheduler,epoch
     with open(adj, 'rb') as f:
         A = np.load(f)
     A_hat = torch.Tensor(get_normalized_adj(A)).to(device)
+
+    inspector = ModelMonitoring(patience=20)
+
 
     if conf["training"]["audio_only"]:
         num_nodes = conf["dataset"]["n_mels"]
@@ -102,6 +108,9 @@ def train(model, loader_train, optimizer, classifier_loss, wandb,scheduler,epoch
                 label = ["neutral", "calm", "happy","sad", "angry", "fearful", "disgust", "surprised"]
                 for i in range(len(label_pred_count)):
                     wandb.log({"Test_label_percentage_"+str(label[i]): correct[i] }) 
+        
+        inspector(test_accuracy)
+
 
         print('\t Training loss {:.5f}, Training accuracy {:.2f}'.format(final_loss,  accuracy))
         if wandb is not None:
