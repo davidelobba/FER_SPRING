@@ -1,6 +1,6 @@
 dataset:
     path : "/home/riccardo/Datasets/RAVDESS_LD_COMPLETE/"
-    path_audio : "/home/riccardo/Datasets/RAVDESS_AUDIO_EXTRACTED/"
+    path_audio : null
     min_frames: 90
     n_mels: 128
     classes : 8

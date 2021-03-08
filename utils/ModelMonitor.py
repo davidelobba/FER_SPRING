@@ -1,5 +1,5 @@
 import torch
-
+import numpy as np 
 class ModelMonitoring(object):
     """ 
         Model Monitoring 
@@ -26,8 +26,8 @@ class ModelMonitoring(object):
 
         if self.best_score is None:
             self.best_score = score
-        elif score + self.score_delta >= self.best_score:
-            if score < self.best_score:
+        elif score + self.score_delta <= self.best_score:
+            if score > self.best_score:
                 self.best_score = score
             self.counter += 1
             if self.counter >= self.patience:
@@ -35,4 +35,5 @@ class ModelMonitoring(object):
         else:
             self.best_score = score
             self.counter = 0
+
 

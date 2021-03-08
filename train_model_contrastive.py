@@ -25,10 +25,13 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
     moco_encoder.train()
     linear.train()
 
-    inspector = ModelMonitoring(patience=20)
+    inspector = ModelMonitoring(patience=100)
 
     with open(adj, 'rb') as f:
-            A = np.load(f)
+        A = np.load(f)
+        if A.sum() != 51**2:
+            A = A + np.identity(51)
+
     A_hat = torch.Tensor(get_normalized_adj(A)).to(device)
 
     with open(config_file) as f:
@@ -135,10 +138,6 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
                 'loss': final_loss,
                 }, filename)
 
-
-
-
-
         # test performance over the test set    
         if test:
             test_loss, test_contr_loss, test_ce_loss, test_accuracy, label_pred_correct, label_pred_count, label_tot_count = evaluate_model_contrastive(moco_encoder,linear, loader_test, encoder_loss, classifier_loss,A_hat, device=device, unsupervised=conf["training"]["unsupervised"])
@@ -152,6 +151,8 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
                     wandb.log({"Test_label_percentage_"+str(label[i]): correct[i] })
                 
             inspector(test_accuracy)
+
+        print(f"BEST SCORE {inspector.best_score} count {inspector.counter}/{inspector.patience}")
 
 
         print('\t Training loss {:.5f}, Train_contr_loss {:.5f}, Train_ce_loss {:.5f}, Training accuracy {:.2f}'.format(final_loss, final_contr_loss, final_ce_loss, accuracy))

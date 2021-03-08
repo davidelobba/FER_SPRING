@@ -1,6 +1,6 @@
 dataset:
     path : "/home/riccardo/Datasets/RAVDESS_LD_COMPLETE/"
-    path_audio : "/home/riccardo/Datasets/RAVDESS_AUDIO_EXTRACTED/"
+    path_audio : null #"/home/riccardo/Datasets/RAVDESS_AUDIO_EXTRACTED/"
     min_frames: 90
     n_mels: 128
     classes : 8
@@ -10,6 +10,7 @@ dataset:
 model_params:
     temperature: 0.07
     feat_out: 8
+    separate_graph: False
     edge_weight: False
     backbone: "STCGN"
     adj_matr : "/home/riccardo/FER_SPRING/adj.npy"

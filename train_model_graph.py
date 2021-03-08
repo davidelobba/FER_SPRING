@@ -31,10 +31,12 @@ def train(model, loader_train, optimizer, classifier_loss, wandb,scheduler,epoch
 
     with open(adj, 'rb') as f:
         A = np.load(f)
+        if A.sum() != 51**2:
+            A = A + np.identity(51)
+    
     A_hat = torch.Tensor(get_normalized_adj(A)).to(device)
 
-    inspector = ModelMonitoring(patience=20)
-
+    inspector = ModelMonitoring(patience=100)
 
     if conf["training"]["audio_only"]:
         num_nodes = conf["dataset"]["n_mels"]
@@ -60,7 +62,6 @@ def train(model, loader_train, optimizer, classifier_loss, wandb,scheduler,epoch
 
         for batch_idx, (targets, ld) in enumerate(tqdm(loader_train)):
             targets, ld = targets.to(device), ld.to(device)
-            
             if conf["training"]["audio_only"]:
                 logits = model(ld)
             else:
@@ -110,6 +111,8 @@ def train(model, loader_train, optimizer, classifier_loss, wandb,scheduler,epoch
                     wandb.log({"Test_label_percentage_"+str(label[i]): correct[i] }) 
         
         inspector(test_accuracy)
+        print(f"BEST SCORE {inspector.best_score} count {inspector.counter}/{inspector.patience}")
+
 
 
         print('\t Training loss {:.5f}, Training accuracy {:.2f}'.format(final_loss,  accuracy))
@@ -121,6 +124,18 @@ def train(model, loader_train, optimizer, classifier_loss, wandb,scheduler,epoch
                 wandb.log({"Train_label_percentage_"+str(label[i]): correct_train[i] }) 
         
         scheduler.step()
+
+        if inspector.stopped:
+            print(f"BEST SCORE {inspector.best_score}")
+            filename = os.path.join(output_dir,"graph","graph_epoch_"+str(e)+".pth")
+            torch.save({
+                    'epoch': e,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'loss': final_loss,
+                    }, filename)
+            break 
+
 
     
     ## save last model version

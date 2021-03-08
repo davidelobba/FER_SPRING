@@ -7,7 +7,7 @@ import yaml
 import numpy as np
 
 from models.MoCo import MoCo
-from models.Encoder import EncoderResnet
+from models.Encoder import Encoder
 from models.FER_GAT import FER_GAT
 from models.STGCN import STGCN, get_normalized_adj
 from matplotlib import pyplot as plt
@@ -30,6 +30,24 @@ def drawLandmark_multiple(img,  landmark):
         cv2.circle(img, (int(x), int(y)), 2, (0,255,0), -1)
     return img
 
+def drawgraph_connection(img,ld, from_ld,to_ld):
+    '''
+    Input:
+    - img: gray or RGB
+    - bbox: type of BBox
+    - landmark: reproject landmark of (5L, 2L)
+    Output:
+    - img marked with landmark and bbox
+    '''
+    kx = ld[17:,0] #.numpy()
+    ky = ld[17:,1] #.numpy()
+    
+    x_values = [kx[from_ld], kx[to_ld]]
+    y_values = [ky[from_ld], ky[to_ld]]
+    for fr, to in zip(from_ld,to_ld):
+        cv2.line(img, (int(kx[fr]), int(ky[fr])), (int(kx[to]), int(ky[to]))  ,(0,255,0), 1)
+    return img
+
 def main(args):
 
     with open(args.config) as f:
@@ -38,6 +56,7 @@ def main(args):
     adj = config["model_params"]["adj_matr"]
     with open(adj, 'rb') as f:
         A = np.load(f)
+    from_ld, to_ld = np.nonzero(A)
     A_hat = torch.Tensor(get_normalized_adj(A)).to(device)
 
     num_nodes = A.shape[0]
@@ -49,18 +68,18 @@ def main(args):
 
 
     #num_nodes, num_features, num_timesteps_input, num_timesteps_output
-    model = STGCN(num_nodes,2,config["dataset"]["train"]["min_frames"],8, config["dataset"]["train"]["classes"])
-    model.load_state_dict(torch.load(args.model,map_location=device))
-    model = model.to(device)
+    #model = STGCN(num_nodes,2,config["dataset"]["train"]["min_frames"],8, config["dataset"]["train"]["classes"])
+    #model.load_state_dict(torch.load(args.model,map_location=device))
+    #model = model.to(device)
 
     plot = args.plot
-    #cap = cv2.VideoCapture(2)
+    cap = cv2.VideoCapture(2)
     
     
     #s = "/home/riccardo/Downloads/Video_Song_Actor_03/Actor_03/01-02-03-01-02-01-03.mp4" #01-02-06-02-02-01-03.mp4" #"/home/riccardo/Datasets/RAVDESS/Test_set/03/01-01-03-01-01-02-24.mp4" #"/home/riccardo/Datasets/CAER_crop/train/Happy/1222.avi"
     #s = "/home/riccardo/Datasets/CAER_crop/validation/Anger/0019.avi" #01-02-06-02-02-01-03.mp4" #"/home/riccardo/Datasets/RAVDESS/Test_set/03/01-01-03-01-01-02-24.mp4" #"/home/riccardo/Datasets/CAER_crop/train/Happy/1222.avi"
-    s = "/home/riccardo/Datasets/CAER_crop/validation/Happy/0126.avi"
-    cap = cv2.VideoCapture(s)
+    #s = "/home/riccardo/Datasets/CAER_crop/validation/Happy/0126.avi"
+    #cap = cv2.VideoCapture(s)
     ## tensor filled with landmarks up to the number of frames required
     lds = torch.Tensor([]) 
     if plot:
@@ -81,6 +100,10 @@ def main(args):
             
             ld = fa.get_landmarks(orig_image)[0]
             image_annot = drawLandmark_multiple(orig_image,ld)
+
+
+            image_annot = drawgraph_connection(image_annot, ld, from_ld, to_ld)
+            #plt.plot(x_values, y_values, color="green");
             cv2.imshow('annotated', image_annot)
             lds = torch.cat((lds, torch.Tensor(ld[17:]).unsqueeze(0)),0)
             if lds.shape[0] > 80:
@@ -92,16 +115,18 @@ def main(args):
                 norm_ld = np.array([kx,ky]).T
                 norm_ld = torch.Tensor(np.rollaxis(norm_ld,1,0))
 
-                out  = model(A_hat,norm_ld.unsqueeze(0).to(device))
-                _, predicted = out.max(1)
-                cv2.imshow('annotated', image_annot)
-                print(f"pred : {label[predicted]}")
-                if plot:
-                    data = out.squeeze(0).cpu().numpy()
-                    for i in range(len(rects)):
-                        rects[i].set_height(data[i])
-                    fig.canvas.draw()
-                    plt.pause(0.00001)
+                #out  = model(A_hat,norm_ld.unsqueeze(0).to(device))
+                #_, predicted = out.max(1)
+                # print(f"pred : {label[predicted]}")
+                # if plot:
+                #     data = out.squeeze(0).cpu().numpy()
+                #     for i in range(len(rects)):
+                #         rects[i].set_height(data[i])
+                #     fig.canvas.draw()
+                #     plt.pause(0.00001)
+            
+            #cv2.imshow('annotated', image_annot)
+            
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break

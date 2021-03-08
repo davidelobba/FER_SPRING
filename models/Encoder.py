@@ -21,9 +21,10 @@ class Encoder(torch.nn.Module):
             A = np.load(f)
         self.A_hat_v = torch.Tensor(get_normalized_adj(A)).to(device)
         adj_a  = np.ones((num_nodes_audio,num_nodes_audio))- np.identity(num_nodes_audio)
+        
         self.A_hat_a = torch.Tensor(get_normalized_adj(adj_a)).to(device)
-
         self.video_stgcn = STGCN(num_nodes_ld,num_feat_video,config["dataset"]["min_frames"],config["model_params"]["feat_out"], num_classes=num_classes,edge_weight=config["model_params"]["edge_weight"], contrastive=False)
+        
         #self.audio_stgcn = STGCN(num_nodes_audio,num_feat_audio,config["dataset"]["min_frames"],config["model_params"]["feat_out"], num_classes=num_classes,edge_weight=config["model_params"]["edge_weight"], contrastive=False)
         self.audio = TCN(in_chan=128, n_blocks=5, n_repeats=2, out_chan=num_classes) #AudioEncoder(out=num_classes)
         #model = model.to(args.device)

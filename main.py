@@ -89,13 +89,18 @@ def main(args):
             encoder = Encoder(config_file=args.config, device=args.device)
             linear = torch.nn.Sequential(torch.nn.Linear(512, 256),torch.nn.ReLU(),torch.nn.Linear(256, config["dataset"]["classes"]))
         else:
-            encoder = STGCN(num_nodes,num_feat_in,config["dataset"]["min_frames"],config["model_params"]["feat_out"], num_classes=128,edge_weight=config["model_params"]["edge_weight"], contrastive=config["training"]["contrastive"])#config["dataset"]["classes"]
-            linear = torch.nn.Sequential(torch.nn.Linear(config["model_params"]["feat_out"]*num_nodes, 512),torch.nn.ReLU(),torch.nn.Linear(512, config["dataset"]["classes"]))
+            encoder = STGCN(num_nodes,num_feat_in,config["dataset"]["min_frames"],config["model_params"]["feat_out"], num_classes=128,edge_weight=config["model_params"]["edge_weight"], contrastive=config["training"]["contrastive"], separate_graph=config["model_params"]["separate_graph"])#config["dataset"]["classes"]
+            if config["model_params"]["separate_graph"]:
+                linear = torch.nn.Sequential(torch.nn.Linear(config["model_params"]["feat_out"]*4, 512),torch.nn.ReLU(),torch.nn.Linear(512, config["dataset"]["classes"]))
+            else:
+                linear = torch.nn.Sequential(torch.nn.Linear(config["model_params"]["feat_out"]*num_nodes, 512),torch.nn.ReLU(),torch.nn.Linear(512, config["dataset"]["classes"]))
+        
         #############
         #encoder = Encoder(config_file=args.config, device=args.device)
         #linear = torch.nn.Sequential(torch.nn.Linear(512, 256),torch.nn.ReLU(),torch.nn.Linear(256, config["dataset"]["classes"]))
         #linear = torch.nn.Sequential(torch.nn.Linear(256, 128),torch.nn.ReLU(),torch.nn.Linear(128, config["dataset"]["classes"]))
         #################
+        
         linear = linear.to(args.device)
         encoder = encoder.to(args.device)
 
@@ -106,7 +111,7 @@ def main(args):
                 model = model.to(args.device)
             else:
                 # num_nodes, num_features, num_timesteps_input, num_featout
-                model = STGCN(num_nodes,num_feat_in,config["dataset"]["min_frames"],config["model_params"]["feat_out"], num_classes=config["dataset"]["classes"],edge_weight=config["model_params"]["edge_weight"] )
+                model = STGCN(num_nodes,num_feat_in,config["dataset"]["min_frames"],config["model_params"]["feat_out"], num_classes=config["dataset"]["classes"],edge_weight=config["model_params"]["edge_weight"], separate_graph=config["model_params"]["separate_graph"])
                 model = model.to(args.device)
         else:
             with open(config["model_params"]["adj_matr"], 'rb') as f:

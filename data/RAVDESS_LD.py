@@ -81,16 +81,19 @@ class RAVDESS_LANDMARK(Dataset):
         for idx in tqdm(range(len(self.samples))):
             path_ld = self.samples[idx][0]            
             if audio:
-                kx = np.zeros((68))
-                ky = np.zeros((68))
+                kx = np.zeros((90,68))
+                ky = np.zeros((90,68))
             else:        
                 data = pd.read_csv(path_ld)
                 kx = data.iloc[:,297:365].to_numpy()
                 ky = data.iloc[:,365:433].to_numpy()
                 kx = (kx - np.min(kx))/np.ptp(kx)
                 ky = (ky - np.min(ky))/np.ptp(ky)   
-            new_samples.append(([kx,ky],self.samples[idx][1],self.samples[idx][2])) 
-        
+            if self.audio:
+                new_samples.append(([kx,ky],self.samples[idx][1],self.samples[idx][2])) 
+            else:
+                new_samples.append(([kx,ky],self.samples[idx][1])) 
+                
         self.samples = new_samples
 
 
@@ -102,7 +105,9 @@ class RAVDESS_LANDMARK(Dataset):
             with open(path_audio, 'rb') as f:
                 mel_spect = np.load(f)
                 len_seq = mel_spect.shape[0]
-                mel_spect = librosa.power_to_db(mel_spect, ref=np.max)
+                # use the db inside the graph does not help, performance are significately worst
+                if self.audio_separate:
+                    mel_spect = librosa.power_to_db(mel_spect, ref=np.max)
             if audio:
                 new_samples.append(([np.zeros((len_seq,68)),np.zeros((len_seq,68))],self.samples[idx][1],torch.Tensor(mel_spect))) 
             else:
@@ -176,6 +181,7 @@ class RAVDESS_LANDMARK(Dataset):
             start_frame = 0
         
         if self.contrastive:
+
             # in case of contrastive return two version sampled in different situation
             if num_frames > self.min_frames:
                 start_frame_2 =  randint(0, num_frames-self.min_frames)
@@ -189,6 +195,7 @@ class RAVDESS_LANDMARK(Dataset):
                 return target, ld[start_frame: start_frame+self.min_frames,17:,: ], ld[start_frame_2: start_frame_2+self.min_frames,17:,: ]
                 
         else:
+
             if self.random_aug and not self.test:
                 ld =  ld[start_frame: start_frame+self.min_frames,17:,: ]
                 ld_vflip  = ld.clone()
@@ -208,5 +215,10 @@ class RAVDESS_LANDMARK(Dataset):
                 return target, out  
             if self.audio_only:
                 return target, mel_spect[start_frame: start_frame+self.min_frames,:]
+            elif self.audio_separate:
+                return target, ld[start_frame: start_frame+self.min_frames,17:,: ], mel_spect[start_frame: start_frame+self.min_frames,:]
+            else:
+                return target, ld[start_frame: start_frame+self.min_frames,17:,: ]
+           
 
             return target, ld[start_frame: start_frame+self.min_frames,17:,: ]
