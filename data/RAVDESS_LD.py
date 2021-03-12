@@ -49,9 +49,9 @@ class RAVDESS_LANDMARK(Dataset):
         self.audio_only = audio_only
         self.n_mels = n_mels 
         self.audio_separate = audio_separate 
-        self.preprocess_landmark(audio=audio_only)
+        self.preprocess_landmark(audio=True)
         if self.audio:
-            self.preprocess_audio(audio=audio_only)
+            self.preprocess_audio(audio=True)
 
     def __len__(self):
             return len(self.samples)

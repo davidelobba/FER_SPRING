@@ -1,9 +1,10 @@
 dataset:
-    path : "/home/riccardo/Datasets/RAVDESS_LD_COMPLETE/"
-    path_audio : "/home/riccardo/Datasets/RAVDESS_AUDIO_EXTRACTED/"
-    n_frames: 90
-    block_dimension: 200 
+    path_train : "/home/riccardo/Datasets/ProcAffWild_2D/Train_Set"
+    path_test : "/home/riccardo/Datasets/ProcAffWild_2D/Validation_Set"
+    n_frames: 16
+    block_dimension: 100 
     twod: True
+    audio: True 
     n_mels: 128
     classes : 7
     zero_start: False
@@ -27,15 +28,16 @@ training:
     scheduler_gamma : 0.9    
     wd : 0.001
     momentum : 0.9
-    epochs : 2000
+    epochs : 200
+    patience : 10
     classes : 8
     num_workers : 8
     log_model: 20
     contrastive: True
     unsupervised: False
-    random_aug: False
+    random_aug: True
     augmented: False
     drop_kp: False
     focal: False 
     audio_only : False
-    audio_separate : True
+    audio_separate : False 

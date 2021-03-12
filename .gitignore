@@ -2,4 +2,6 @@ wandb/
 __pycache__/
 checkpoint/
 .vscode/
+cross/
+config_wild/
 dataset.md

@@ -25,7 +25,6 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
     moco_encoder.train()
     linear.train()
 
-    inspector = ModelMonitoring(patience=100)
 
     with open(adj, 'rb') as f:
         A = np.load(f)
@@ -42,9 +41,12 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
         adj  = np.ones((num_nodes,num_nodes))- np.identity(num_nodes)
         A_hat = torch.Tensor(get_normalized_adj(adj)).to(device)
 
+    inspector = ModelMonitoring(patience=conf["training"]["patience"])
+
     optimizer_encoder, optimizer_decoder = optimizer[0], optimizer[1]
     scheduler_encoder, scheduler_decoder = scheduler[0], scheduler[1]
-    
+    n_classes = conf["dataset"]["classes"]
+        
     for e in range(epochs):
 
         samples = 0.
@@ -54,9 +56,11 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
         cumulative_ce_loss = 0.
         cumulative_accuracy = 0.
 
-        train_label_pred = [0,0,0,0,0,0,0,0]
-        train_label_pred_count = [0,0,0,0,0,0,0,0]
-        train_label_count = [0,0,0,0,0,0,0,0]
+        
+        train_label_pred = [0 for k in range(n_classes)]
+        train_label_pred_count = [0 for k in range(n_classes)]
+        train_label_count = [0 for k in range(n_classes)]
+
         print(f"Epoch -  {e}")
 
         for batch_idx, batch in enumerate(tqdm(loader_train)):
@@ -64,8 +68,10 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
                 targets, ld_1, ld_2 =  batch[0].to(device),batch[1].to(device), batch[2].to(device)
             else:
                 targets, ld_1, ld_2, ad_1, ad_2 =  batch[0].to(device), batch[1].to(device), batch[2].to(device), batch[3].to(device),batch[4].to(device)
-
-
+            targets =  targets.long()
+            
+            #print(ld_1.shape)
+            #print(ld_1)
             # Forward pass
             #contr_feat, contr_tar, video_features = moco_encoder(ld_1,ld_2,targets, train=True)
             if len(batch) ==3:
@@ -76,7 +82,7 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
                 q2, vf_q2 = moco_encoder(ld_2, ad_2)
                 
             contr_feat = torch.cat((q1.unsqueeze(1),q2.unsqueeze(1)),1)
-            #print(contr_feat.shape)
+
             if conf["training"]["unsupervised"]:
                 contr_loss = encoder_loss(contr_feat)
             else:
@@ -85,7 +91,8 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
             
 
             logits = linear(video_feat)
-            ce_loss = classifier_loss(logits, torch.cat((targets,targets),0))
+            ce_loss = classifier_loss(logits, torch.cat((targets,targets),0).long())
+
             targets = torch.cat((targets,targets))
 
             loss = contr_loss + ce_loss
@@ -110,6 +117,7 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
             for i in range(predicted.shape[0]):
                 if predicted[i] == targets[i]:
                     train_label_pred[predicted[i]] +=1
+
                 train_label_count[targets[i]] +=1
                 train_label_pred_count[predicted[i]] += 1
 
@@ -140,13 +148,16 @@ def train(moco_encoder, linear, loader_train, optimizer, scheduler, encoder_loss
 
         # test performance over the test set    
         if test:
-            test_loss, test_contr_loss, test_ce_loss, test_accuracy, label_pred_correct, label_pred_count, label_tot_count = evaluate_model_contrastive(moco_encoder,linear, loader_test, encoder_loss, classifier_loss,A_hat, device=device, unsupervised=conf["training"]["unsupervised"])
+            test_loss, test_contr_loss, test_ce_loss, test_accuracy, label_pred_correct, label_pred_count, label_tot_count = evaluate_model_contrastive(moco_encoder,linear, loader_test, encoder_loss, classifier_loss,A_hat, device=device, unsupervised=conf["training"]["unsupervised"], n_classes=n_classes)
             print('\t Test loss {:.5f}, Test_contr_loss {:.5f}, Test_ce_loss {:.5f}, Test accuracy {:.2f}'.format(test_loss, test_contr_loss, test_ce_loss,test_accuracy))
             if wandb is not None:
                 wandb.log({"Test_Accuracy": test_accuracy , "Test_Contrastive Loss": test_contr_loss, 
                         "Test_Cross Entropy Loss": test_ce_loss,  "Test_Total Loss": test_loss})
                 correct = label_pred_correct/label_tot_count
-                label = ["neutral", "calm", "happy","sad", "angry", "fearful", "disgust", "surprised"]
+                if n_classes==7:
+                    label = ["Neutral","Anger","Disgust","Fear","Happiness","Sadness","Surprise"]
+                else:
+                    label = ["neutral", "calm", "happy","sad", "angry", "fearful", "disgust", "surprised"]
                 for i in range(len(label_pred_count)):
                     wandb.log({"Test_label_percentage_"+str(label[i]): correct[i] })
                 

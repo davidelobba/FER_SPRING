@@ -7,7 +7,7 @@ do
     if pgrep -x python | grep $PD  
     then
         echo "Running"
-        sleep 60
+        sleep 2
     else
         echo "Stopped"
         echo "Starting new process"

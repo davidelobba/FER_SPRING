@@ -4,6 +4,8 @@ from argparse import ArgumentParser
 from datetime import datetime
 import wandb
 import yaml
+import math
+
 import numpy as np
 
 from models.MoCo import MoCo
@@ -17,7 +19,7 @@ import cv2
 import face_alignment
 
 
-def drawLandmark_multiple(img,  landmark):
+def drawLandmark_multiple(img,  landmark, color=(0,255,0)):
     '''
     Input:
     - img: gray or RGB
@@ -27,7 +29,7 @@ def drawLandmark_multiple(img,  landmark):
     - img marked with landmark and bbox
     '''
     for x, y in landmark:
-        cv2.circle(img, (int(x), int(y)), 2, (0,255,0), -1)
+        cv2.circle(img, (int(x), int(y)), 2, color, -1)
     return img
 
 def drawgraph_connection(img,ld, from_ld,to_ld):
@@ -73,13 +75,17 @@ def main(args):
     #model = model.to(device)
 
     plot = args.plot
-    cap = cv2.VideoCapture(2)
+    #cap = cv2.VideoCapture(2)
     
+    s = "/home/riccardo/Datasets/AffWild2/phoebe/dk15/new_aff_wild/Aff-Wild2_ready/Expression_Set/videos/Train_Set/video49.mp4"
+    s = "/home/riccardo/Datasets/AffWild2/phoebe/dk15/new_aff_wild/Aff-Wild2_ready/Expression_Set/videos/Train_Set/6-30-1920x1080.mp4"
+    s = "/home/riccardo/Datasets/AffWild2/phoebe/dk15/new_aff_wild/Aff-Wild2_ready/Expression_Set/videos/Train_Set/46-30-484x360.mp4"
     
-    #s = "/home/riccardo/Downloads/Video_Song_Actor_03/Actor_03/01-02-03-01-02-01-03.mp4" #01-02-06-02-02-01-03.mp4" #"/home/riccardo/Datasets/RAVDESS/Test_set/03/01-01-03-01-01-02-24.mp4" #"/home/riccardo/Datasets/CAER_crop/train/Happy/1222.avi"
+    cap = cv2.VideoCapture(s)
+    # = "/home/riccardo/Downloads/Video_Song_Actor_03/Actor_03/01-02-03-01-02-01-03.mp4" #01-02-06-02-02-01-03.mp4" #"/home/riccardo/Datasets/RAVDESS/Test_set/03/01-01-03-01-01-02-24.mp4" #"/home/riccardo/Datasets/CAER_crop/train/Happy/1222.avi"
     #s = "/home/riccardo/Datasets/CAER_crop/validation/Anger/0019.avi" #01-02-06-02-02-01-03.mp4" #"/home/riccardo/Datasets/RAVDESS/Test_set/03/01-01-03-01-01-02-24.mp4" #"/home/riccardo/Datasets/CAER_crop/train/Happy/1222.avi"
     #s = "/home/riccardo/Datasets/CAER_crop/validation/Happy/0126.avi"
-    #cap = cv2.VideoCapture(s)
+    #
     ## tensor filled with landmarks up to the number of frames required
     lds = torch.Tensor([]) 
     if plot:
@@ -88,21 +94,68 @@ def main(args):
     
     ## from https://github.com/1adrianb/face-alignment
     fa = face_alignment.FaceAlignment(face_alignment.LandmarksType._2D, flip_input=False, device=device)
+    faces_bucket  = None
+    shift = 0.1
+
     with  torch.no_grad():
         while True:
             
             ret, orig_image = cap.read()
+
+            scale_percent = 40 # percent of original size
+            width = int(orig_image.shape[1] * scale_percent / 100)
+            height = int(orig_image.shape[0] * scale_percent / 100)
+            dim = (width, height)
+            
+            # resize image
+            #print(orig_image.shape)
+            orig_image = cv2.resize(orig_image, dim, interpolation = cv2.INTER_AREA)
+            #print(orig_image.shape)
+
+            shift_width  = cap.get(cv2.CAP_PROP_FRAME_WIDTH) * shift  # float `width`
+            shift_height = cap.get(cv2.CAP_PROP_FRAME_HEIGHT) * shift # float `height`
 
             #print(orig_image)
             if orig_image is None:
                 cap = cv2.VideoCapture(s)
                 continue
             
-            ld = fa.get_landmarks(orig_image)[0]
-            image_annot = drawLandmark_multiple(orig_image,ld)
+            ld_l = fa.get_landmarks(orig_image)
+            colors=  [(0,255,0), (0,255,255)]
+            if faces_bucket is None:
+                faces_bucket = [[k[:,0].mean(),k[:,1].mean()] for k in ld_l]
+                print(faces_bucket)
+            elif len(faces_bucket) < len(ld_l):
+                print("aggiungimi!")
+                
+            for i in range(len(ld_l)):
+                ld = ld_l[i]
+                max_dist = max(shift_width, shift_height)
+                c_index = 0 
+                
+                for k in range(len(faces_bucket)):
+                    fb = np.array(faces_bucket[k])
+                    dist = np.linalg.norm([ld[:,0].mean(),ld[:,1].mean()]-np.array(fb))
+                    #dist = math.dist([ld[:,0].mean(),ld[:,1].mean()],fb )
+                    if dist < max_dist:
+                        max_dist = dist
+                        c_index = k
+                
+                ## update of the center face works as expected
+                faces_bucket[c_index] = [ld[:,0].mean(),ld[:,1].mean()]
+                ant = 0
+                
+                if c_index ==0:
+                    ant = 1
+                
+                # x works as expected in this way the right one is not considered 
+                # the other way around the left one is not considered
+                if  faces_bucket[c_index][0] > faces_bucket[ant][0]:
+                    continue 
+                image_annot = drawLandmark_multiple(orig_image,ld,colors[c_index])
+                #image_annot = drawgraph_connection(image_annot, ld, from_ld, to_ld)
+            
 
-
-            image_annot = drawgraph_connection(image_annot, ld, from_ld, to_ld)
             #plt.plot(x_values, y_values, color="green");
             cv2.imshow('annotated', image_annot)
             lds = torch.cat((lds, torch.Tensor(ld[17:]).unsqueeze(0)),0)
@@ -130,14 +183,6 @@ def main(args):
 
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
-
-
-
-
-      
-    
-
-
 
 
 if __name__ == '__main__':

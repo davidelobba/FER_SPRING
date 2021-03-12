@@ -1,10 +1,14 @@
 dataset:
-    path : "/data1/rfranceschini/RAVDESS_LD_COMPLETE/"
-    path_audio : "/data1/rfranceschini/RAVDESS_AUDIO_EXTRACTED/"
-    min_frames: 90
-    n_mels : 128
-    classes : 8
+    path_train : "/home/riccardo/Datasets/ProcAffWild_3D/Train_Set"
+    path_test : "/home/riccardo/Datasets/ProcAffWild_3D/Validation_Set"
+    n_frames: 90
+    block_dimension: 200 
+    twod: False
+    audio: False
+    n_mels: 128
+    classes : 7
     zero_start: False
+    actor_split: False 
     split_percentage: 0.9
 
 model_params:
@@ -12,26 +16,27 @@ model_params:
     feat_out: 8
     separate_graph: False
     edge_weight: False
+    attention: False
     backbone: "STCGN"
-    adj_matr : "/data1/rfranceschini/FER_SPRING/adj_ones.npy"
+    adj_matr : "/home/riccardo/FER_SPRING/adj.npy"
 
 training:
     lr_encoder : 0.001
     lr_linear : 0.001
-    batch_size : 128          
-    wd : 0.001
+    batch_size : 32    
     scheduler_step :  100
     scheduler_gamma : 0.9    
+    wd : 0.001
     momentum : 0.9
     epochs : 2000
     classes : 8
-    num_workers : 6
+    num_workers : 8
     log_model: 20
-    contrastive: False
+    contrastive: True
     unsupervised: False
     random_aug: False
     augmented: False
     drop_kp: False
     focal: False 
-    audio_only: False
+    audio_only : False
     audio_separate : False

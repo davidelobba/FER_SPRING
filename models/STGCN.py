@@ -85,7 +85,7 @@ class STGCNBlock(nn.Module):
     """
 
     def __init__(self, in_channels, spatial_channels, out_channels,
-                 num_nodes, att_dim):
+                 num_nodes, att_dim, attention=True):
         """
         :param in_channels: Number of input features at each node in each time
         step.
@@ -98,8 +98,12 @@ class STGCNBlock(nn.Module):
         super(STGCNBlock, self).__init__()
         #print(f"in_channels {in_channels} spatial_channels {spatial_channels} out_channels {out_channels} num_nodes {num_nodes}")
         #self.attention_block = AttentionBlock(in_channels,att_dim)
-        self.attention_block = CAM_Module(51)
-        #self.attention_block = PAM_Module(51)
+        
+        self.attention = attention
+        if self.attention:
+            self.attention_block_time = PAM_Module(att_dim)
+            self.attention_block_space = PAM_Module(51)
+
 
         self.temporal1 = TimeBlock(in_channels=in_channels,
                                    out_channels=out_channels)
@@ -133,10 +137,20 @@ class STGCNBlock(nn.Module):
         
 
         ### attenion using CAM or PAM
-        lsf = self.attention_block(lfs)
+        if self.attention:
+            time_lsf = lfs.permute(0,2,1,3).contiguous()
+            time_lsf = self.attention_block_time(time_lsf)
+            time_lsf = time_lsf.permute(0,2,1,3).contiguous()
+            space_lsf = self.attention_block_space(lfs)
+            lfs = time_lsf + space_lsf
+            # shape = t.shape
+            # lfs = torch.bmm(att_m,t.flatten(start_dim=2))
+            # print(lfs.shape)
+            # lfs = lfs.view(shape)
+
+            
 
         #lfs = torch.einsum("ijh,jklm->kjlm", [att_m, t.permute(1, 0, 2, 3)])
-        
         #lfs = torch.einsum("ihj,jklm->kjlm", [att_m, t.permute(1, 0, 2, 3)])
         #print(att_m.shape)
         #print(t.flatten(start_dim=2).shape)
@@ -168,7 +182,7 @@ class MiniBlock(nn.Module):
     Mini STGCN block for each face section.
     """
 
-    def __init__(self, num_nodes,num_features=64, att_dim=88):
+    def __init__(self, num_nodes,num_features=64, att_dim=88, attenion=True):
         """
         :param in_channels: Number of input features at each node in each time
         step.
@@ -180,9 +194,9 @@ class MiniBlock(nn.Module):
         """
         super(MiniBlock, self).__init__()
         self.block1 = STGCNBlock(in_channels=num_features, out_channels=64,
-                                spatial_channels=16, num_nodes=num_nodes, att_dim= att_dim)
+                                spatial_channels=16, num_nodes=num_nodes, att_dim= att_dim, attention=attenion)
         self.block2 = STGCNBlock(in_channels=64, out_channels=64,
-                                spatial_channels=16, num_nodes=num_nodes, att_dim= att_dim-4)
+                                spatial_channels=16, num_nodes=num_nodes, att_dim= att_dim-4,attention=attenion)
         self.last_temporal = TimeBlock(in_channels=64, out_channels=64)
         
     def reset_parameters(self):
@@ -205,7 +219,7 @@ class STGCN(nn.Module):
     """
 
     def __init__(self, num_nodes, num_features, num_timesteps_input,
-                 num_timesteps_output,num_classes=8, edge_weight=False, contrastive=False, separate_graph=False):
+                 num_timesteps_output,num_classes=8, edge_weight=False, contrastive=False, separate_graph=False, attention=False):
         """
         :param num_nodes: Number of nodes in the graph.
         :param num_features: Number of features at each node in each time step.
@@ -225,12 +239,12 @@ class STGCN(nn.Module):
             self.graph_kp = [[0,11],[12,12+11],[23,23+9], [31,51]]
             nodes = [11,11,9,20]
             
-            self.eye_r_block = MiniBlock(nodes[0], num_features=num_features)
-            self.eye_l_block = MiniBlock(nodes[1],num_features=num_features)
-            self.nose_block = MiniBlock(nodes[2],num_features=num_features)
-            self.mouth_block = MiniBlock(nodes[3],num_features=num_features)
+            self.eye_r_block = MiniBlock(nodes[0], num_features=num_features, attention=attention)
+            self.eye_l_block = MiniBlock(nodes[1],num_features=num_features, attention=attention)
+            self.nose_block = MiniBlock(nodes[2],num_features=num_features, attention=attention)
+            self.mouth_block = MiniBlock(nodes[3],num_features=num_features, attention=attention)
 
-            self.global_block = MiniBlock(4,num_features=64, att_dim=78)
+            self.global_block = MiniBlock(4,num_features=64, att_dim=78, attention=attention)
             self.fully = nn.Linear((num_timesteps_input - 20) * 64,
                         num_timesteps_output)
 
@@ -242,13 +256,13 @@ class STGCN(nn.Module):
 
         else:
             self.block1 = STGCNBlock(in_channels=num_features, out_channels=64,
-                                    spatial_channels=16, num_nodes=num_nodes, att_dim= 88)
+                                    spatial_channels=16, num_nodes=num_nodes, att_dim= 88, attention=attention)
             self.block2 = STGCNBlock(in_channels=64, out_channels=64,
-                                    spatial_channels=16, num_nodes=num_nodes, att_dim= 84)
+                                    spatial_channels=16, num_nodes=num_nodes, att_dim= 84, attention=attention)
             self.last_temporal = TimeBlock(in_channels=64, out_channels=64)
-            self.fully = nn.Linear((num_timesteps_input -2 * 5) * 64,
-                                    num_timesteps_output)
+            self.fully = nn.Linear((num_timesteps_input -2 * 5) * 64,num_timesteps_output)
 
+            self.dropout = nn.Dropout(p=0.1) 
 
             if not self.contrastive:
                 self.fc_out = nn.Linear(num_nodes*num_timesteps_output,num_classes)
@@ -257,12 +271,15 @@ class STGCN(nn.Module):
             #self.fc_out = nn.Linear(num_nodes*num_timesteps_output,num_classes)
 
         if edge_weight:
-            self.edge_importance1 = nn.Parameter(torch.ones((51,51)))
-            self.edge_importance2 = nn.Parameter(torch.ones((51,51)))
+            m = torch.Tensor(get_normalized_adj(np.ones((51,51))))
+            self.edge_importance1 = nn.Parameter(m)
+            m = torch.Tensor(get_normalized_adj(np.ones((51,51))))
+            self.edge_importance2 = nn.Parameter(m)
         else:
             self.edge_importance1 = 1 #torch.ones((51,51))
             self.edge_importance2 = 1 #torch.ones((51,51))
-
+        self.edge_weight = edge_weight
+        self.mask =  torch.zeros(51,51)
               
 
     def forward(self, A_hat, X, eval=False, augmented=False):
@@ -292,9 +309,20 @@ class STGCN(nn.Module):
             out4 = self.fully(global_out.reshape((global_out.shape[0], global_out.shape[1], -1)))
             #print(out4.shape)
         else:
-            out1 = self.block1(X.permute(0,2,1,3), A_hat * self.edge_importance1)
-            out2 = self.block2(out1, A_hat *  self.edge_importance1)
-            out3 = self.last_temporal(out2)
+
+            if self.edge_weight:
+                if self.mask.sum() == 0:
+                    self.mask = self.mask.to(A_hat.device)
+                    self.mask[torch.where(A_hat==0)]= 1
+                edge1 = self.edge_importance1 * self.mask
+                edge2 = self.edge_importance2 * self.mask 
+            else:
+                edge1 = 0
+                edge2 = 0
+
+            out1 = self.block1(X.permute(0,2,1,3), A_hat +edge1 )
+            out2 = self.block2(out1, A_hat + edge2 )
+            out3 = self.dropout(self.last_temporal(out2))
             out4 = self.fully(out3.reshape((out3.shape[0], out3.shape[1], -1)))
 
         if not self.contrastive:

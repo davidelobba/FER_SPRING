@@ -118,7 +118,7 @@ class Conv1DBlock(nn.Module):
 class TCN(nn.Module):
     # n blocks --> receptive field increases , n_repeats increases capacity mostly
     def __init__(self, in_chan=40, n_src=1, out_chan=248, n_blocks=5, n_repeats=2, 
-                 bn_chan=64, hid_chan=128, kernel_size=3, ):
+                 bn_chan=64, hid_chan=128, kernel_size=3,cut_out=False ):
         super(TCN, self).__init__()
         self.in_chan = in_chan
         self.n_src = n_src
@@ -129,6 +129,7 @@ class TCN(nn.Module):
         self.bn_chan = bn_chan
         self.hid_chan = hid_chan
         self.kernel_size = kernel_size
+        self.cut_out = cut_out
 
         layer_norm = GlobLN(in_chan)
         bottleneck_conv = nn.Conv1d(in_chan, bn_chan, 1)
@@ -159,6 +160,8 @@ class TCN(nn.Module):
             output = output + residual
 
         ###provare max pool2D su ouput seguito de reshape .view(-1,1)
+        if self.cut_out:
+            return output.mean(1)
         logits = self.out(output.mean(-1))
         # output = F.max_pool2d(output, 4).view(output.size(0),-1)
         # logits = self.out(output)

@@ -23,6 +23,7 @@ from utils.utils import split_dataset
 from data.CAER import CAER
 from data.RAVDESS_LD import RAVDESS_LANDMARK
 from data.CAER_LD import CAER_LANDMARK
+from data.AffWild2 import AffWild
 
 from torch.utils.data import WeightedRandomSampler
 
@@ -38,19 +39,32 @@ def main(args):
                     "learning_rate_classif": config["training"]["lr_linear"],
                     "backbone": config["model_params"]["backbone"],
                     "split_percentage": config["dataset"]["split_percentage"],
-                    "frame_l": config["dataset"]["min_frames"],
+                    "frame_l": config["dataset"]["n_frames"],
                     "dataset": args.dataset
                 } )
     else:
         wandb = None
 
+    num_nodes = 51
+    num_feat_in = 2
+
     print(f"------ Initializing dataset...")
     # data initialization
+    sampler = None 
     if args.dataset == "CAER":
         dataset_train = CAER(config["dataset"]["train"]["path"],dim_image=config["dataset"]["train"]["dim_image"], min_frames=config["dataset"]["train"]["min_frames"])
         dataset_test = CAER(config["dataset"]["test"]["path"],dim_image=config["dataset"]["train"]["dim_image"], min_frames=config["dataset"]["test"]["min_frames"])
+    elif args.dataset== "AFFWILD":
+        dataset_train = AffWild(config["dataset"]["path_train"],n_frames=config["dataset"]["n_frames"], audio=config["dataset"]["audio"],audio_only=config["training"]["audio_only"],audio_separate=config["training"]["audio_separate"], contrastive=config["training"]["contrastive"], block_dimension=config["dataset"]["block_dimension"], twod=config["dataset"]["twod"], random_aug=config["training"]["random_aug"])
+        dataset_test =  AffWild(config["dataset"]["path_test"],test=True, n_frames=config["dataset"]["n_frames"], audio=config["dataset"]["audio"],audio_only=config["training"]["audio_only"],audio_separate=config["training"]["audio_separate"], contrastive=config["training"]["contrastive"], block_dimension=config["dataset"]["n_frames"], twod=config["dataset"]["twod"])
+        print(dataset_train.__len__())
+        print(dataset_test.__len__())
+        if not config["dataset"]["twod"]:
+            num_feat_in = 3
+        if config["dataset"]["audio"] and not config["training"]["audio_separate"] :
+            num_feat_in += 1
     elif args.dataset== "RAVDESS":
-        sample_test, sample_train = split_dataset(path=config["dataset"]["path"], perc=config["dataset"]["split_percentage"],path_audio=config["dataset"]["path_audio"])
+        sample_test, sample_train = split_dataset(path=config["dataset"]["path"], perc=config["dataset"]["split_percentage"],path_audio=config["dataset"]["path_audio"], actor_split=config["dataset"]["actor_split"])
         audio =False 
         if config["dataset"]["path_audio"] is not None:
             audio =True 
@@ -58,38 +72,42 @@ def main(args):
         dataset_test = RAVDESS_LANDMARK(config["dataset"]["path"], samples=sample_test, min_frames=config["dataset"]["min_frames"],n_mels=config["dataset"]["n_mels"],test=True, audio=audio,audio_only=config["training"]["audio_only"],audio_separate=config["training"]["audio_separate"], zero_start=config["dataset"]["zero_start"],  contrastive=config["training"]["contrastive"],  mixmatch=config["training"]["augmented"], random_aug=config["training"]["random_aug"])        
         #dataset_train = RAVDESS_LANDMARK(config["dataset"]["train"]["path"], min_frames=config["dataset"]["train"]["min_frames"], zero_start=config["dataset"]["train"]["zero_start"], contrastive=config["training"]["contrastive"],  mixmatch=config["training"]["augmented"], random_aug=config["training"]["random_aug"], drop_kp=config["training"]["drop_kp"])
         #dataset_test = RAVDESS_LANDMARK(config["dataset"]["test"]["path"], min_frames=config["dataset"]["test"]["min_frames"],  test=True, zero_start=config["dataset"]["train"]["zero_start"],  contrastive=config["training"]["contrastive"],  mixmatch=config["training"]["augmented"], random_aug=config["training"]["random_aug"])
-    
+        _ , samples_weight = dataset_train.get_class_sample_count()
+        sampler = WeightedRandomSampler(samples_weight, len(samples_weight))
+
+        if config["dataset"]["path_audio"] is not None:
+            num_feat_in = 3
+        if config["training"]["audio_only"]:
+            num_nodes = config["dataset"]["n_mels"]
+            num_feat_in = 1
+
     elif args.dataset== "CAER_LD":
         dataset_train = CAER_LANDMARK(config["dataset"]["train"]["path"], min_frames=config["dataset"]["train"]["min_frames"], zero_start=config["dataset"]["train"]["zero_start"],  contrastive=config["training"]["contrastive"])
         dataset_test = CAER_LANDMARK(config["dataset"]["test"]["path"], min_frames=config["dataset"]["test"]["min_frames"],  test=True, zero_start=config["dataset"]["train"]["zero_start"],  contrastive=config["training"]["contrastive"])
-      
-    _ , samples_weight = dataset_train.get_class_sample_count()
-    sampler = WeightedRandomSampler(samples_weight, len(samples_weight))
-    loader_train = torch.utils.data.DataLoader(dataset_train, batch_size=config["training"]["batch_size"],shuffle=False,num_workers=config["training"]["num_workers"], drop_last= False, sampler=sampler)
+
+    if sampler is None:
+        loader_train = torch.utils.data.DataLoader(dataset_train, batch_size=config["training"]["batch_size"],shuffle=True,num_workers=config["training"]["num_workers"], drop_last= False)
+    else:
+        loader_train = torch.utils.data.DataLoader(dataset_train, batch_size=config["training"]["batch_size"],shuffle=True,num_workers=config["training"]["num_workers"], drop_last= False, sampler=sampler)
     loader_test = torch.utils.data.DataLoader(dataset_test, batch_size=config["training"]["batch_size"], shuffle=True,num_workers=config["training"]["num_workers"], drop_last= False)
     print(f"------ Dataset Initialized")
     
     # encoder + Moco
     print(f"------ Initializing networks")
-    num_nodes = 51
-    num_feat_in = 2
 
-    if config["dataset"]["path_audio"] is not None:
-        num_feat_in = 3
-    if config["training"]["audio_only"]:
-        num_nodes = config["dataset"]["n_mels"]
-        num_feat_in = 1
-    
+
     if config["training"]["contrastive"]:
         with open(config["model_params"]["adj_matr"], 'rb') as f:
             A = np.load(f)
             
         A_hat = torch.Tensor(get_normalized_adj(A)).to(args.device)
         if config["training"]["audio_separate"]:
-            encoder = Encoder(config_file=args.config, device=args.device)
+            encoder = Encoder(config_file=args.config, device=args.device, num_feat_video=num_feat_in)
             linear = torch.nn.Sequential(torch.nn.Linear(512, 256),torch.nn.ReLU(),torch.nn.Linear(256, config["dataset"]["classes"]))
+            # test with audio preprocess
+            #linear = torch.nn.Sequential(torch.nn.Linear(config["model_params"]["feat_out"]*num_nodes, 512),torch.nn.ReLU(),torch.nn.Linear(512, config["dataset"]["classes"]))
         else:
-            encoder = STGCN(num_nodes,num_feat_in,config["dataset"]["min_frames"],config["model_params"]["feat_out"], num_classes=128,edge_weight=config["model_params"]["edge_weight"], contrastive=config["training"]["contrastive"], separate_graph=config["model_params"]["separate_graph"])#config["dataset"]["classes"]
+            encoder = STGCN(num_nodes,num_feat_in,config["dataset"]["n_frames"],config["model_params"]["feat_out"], num_classes=128,edge_weight=config["model_params"]["edge_weight"], contrastive=config["training"]["contrastive"], separate_graph=config["model_params"]["separate_graph"], attention=config["model_params"]["attention"]) #config["dataset"]["classes"]
             if config["model_params"]["separate_graph"]:
                 linear = torch.nn.Sequential(torch.nn.Linear(config["model_params"]["feat_out"]*4, 512),torch.nn.ReLU(),torch.nn.Linear(512, config["dataset"]["classes"]))
             else:
@@ -111,7 +129,7 @@ def main(args):
                 model = model.to(args.device)
             else:
                 # num_nodes, num_features, num_timesteps_input, num_featout
-                model = STGCN(num_nodes,num_feat_in,config["dataset"]["min_frames"],config["model_params"]["feat_out"], num_classes=config["dataset"]["classes"],edge_weight=config["model_params"]["edge_weight"], separate_graph=config["model_params"]["separate_graph"])
+                model = STGCN(num_nodes,num_feat_in,config["dataset"]["min_frames"],config["model_params"]["feat_out"], num_classes=config["dataset"]["classes"],edge_weight=config["model_params"]["edge_weight"], separate_graph=config["model_params"]["separate_graph"], attention=config["model_params"]["attention"])
                 model = model.to(args.device)
         else:
             with open(config["model_params"]["adj_matr"], 'rb') as f:

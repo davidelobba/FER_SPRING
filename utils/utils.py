@@ -43,27 +43,42 @@ def find_classes(dir):
     return classes, class_to_idx
 
 
-def split_dataset(path=None,path_audio=None, perc=0.9,seed=42):
+def split_dataset(path=None,path_audio=None, perc=0.9,actor_split=False,seed=42):
 
     if path is None:
         msg = "Path to the dataset folder is needed"
         raise RuntimeError(msg)
 
     instances = make_dataset(path,find_classes(path)[1],directory_audio=path_audio)
-    class_sep = [ [] for _ in find_classes(path)[0]]
-    for k in instances:
-        class_sep[k[1]].append(k)
-
     random.seed(seed)
-    perc = perc
-    cl_train = []
-    cl_test = []
 
-    for cl in class_sep:
-        n_data = len(cl)
-        len_train = int(n_data*perc)
-        len_test = n_data - len_train
-        cl_train += random.sample(cl,len_train)
+    if actor_split==False:
+        class_sep = [ [] for _ in find_classes(path)[0]]
+        for k in instances:
+            class_sep[k[1]].append(k)
+
+        perc = perc
+        cl_train = []
+        cl_test = []
+
+        for cl in class_sep:
+            n_data = len(cl)
+            len_train = int(n_data*perc)
+            len_test = n_data - len_train
+            cl_train += random.sample(cl,len_train)
+
+        cl_test = list(set(instances).difference(cl_train))
+        return cl_test, cl_train
+    else:
+        l_actor = [ [] for i in range(24)]
+        for ist in instances:
+            l_actor[int(ist[0].split(".")[0].split("-")[-1])-1].append(ist)
+        random.shuffle(l_actor)
+        train_split_n = int(len(l_actor)*perc)
+        actor_train = l_actor[:train_split_n]
+        actor_test = l_actor[train_split_n:]
         
-    cl_test = list(set(instances).difference(cl_train))
-    return cl_test, cl_train
+        actor_train = [item for sublist in actor_train for item in sublist]
+        actor_test = [item for sublist in actor_test for item in sublist]
+
+        return actor_test, actor_train

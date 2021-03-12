@@ -3,7 +3,7 @@ from tqdm import tqdm
 from sklearn.metrics import precision_recall_fscore_support
 import numpy as np
 
-def evaluate_model_contrastive(encoder, linear, data_loader, encoder_loss, classifier_loss,A_hat,device='cuda:0', unsupervised=False):
+def evaluate_model_contrastive(encoder, linear, data_loader, encoder_loss, classifier_loss,A_hat,device='cuda:0', unsupervised=False, n_classes=7):
     samples = 0.
     batch_count =0
 
@@ -12,9 +12,9 @@ def evaluate_model_contrastive(encoder, linear, data_loader, encoder_loss, class
     cumulative_ce_loss = 0.
     cumulative_accuracy = 0.
 
-    label_pred = [0,0,0,0,0,0,0,0]
-    label_pred_count = [0,0,0,0,0,0,0,0]
-    label_count = [0,0,0,0,0,0,0,0]
+    label_pred = [0 for k in range(n_classes)]
+    label_pred_count = [0 for k in range(n_classes)]
+    label_count = [0 for k in range(n_classes)]
 
     encoder.eval()
     linear.eval()
@@ -24,6 +24,7 @@ def evaluate_model_contrastive(encoder, linear, data_loader, encoder_loss, class
                 targets, ld_1, ld_2 =  batch[0].to(device),batch[1].to(device), batch[2].to(device)
             else:
                 targets, ld_1, ld_2, ad_1, ad_2 =  batch[0].to(device), batch[1].to(device), batch[2].to(device), batch[3].to(device),batch[4].to(device)
+            targets =  targets.long()
 
             # Forward pass
             #contr_feat, contr_tar, video_features = encoder(ld_1,ld_2,targets,train=False)                
@@ -91,7 +92,7 @@ def evaluate_model_contrastive(encoder, linear, data_loader, encoder_loss, class
 
     return final_loss, final_contr_loss, final_ce_loss, accuracy, np.array(label_pred), np.array(label_pred_count), np.array(label_count)
 
-def evaluate_model_graph(model,data_loader,  classifier_loss,device='cuda:0', adj=None, augmented=False, audio_only= False):
+def evaluate_model_graph(model,data_loader,  classifier_loss,device='cuda:0', adj=None, augmented=False, audio_only= False, n_classes=7):
     samples = 0.
     batch_count = 0
     cumulative_loss = 0.
@@ -99,9 +100,9 @@ def evaluate_model_graph(model,data_loader,  classifier_loss,device='cuda:0', ad
     cumulative_ce_loss = 0.
     cumulative_accuracy = 0.
 
-    label_pred = [0,0,0,0,0,0,0,0]
-    label_pred_count = [0,0,0,0,0,0,0,0]
-    label_count = [0,0,0,0,0,0,0,0]
+    label_pred = [0 for k in range(n_classes)]
+    label_pred_count = [0 for k in range(n_classes)]
+    label_count = [0 for k in range(n_classes)]
 
     model.eval()
     with torch.no_grad():
